@@ -1,0 +1,118 @@
+# =============================================================================
+# Anker Solix Device Configuration File
+# =============================================================================
+
+# Product information
+# default_name: Default product name (used when product code not found or SN not available)
+# product_code_mapping: Map product code to specific product name
+# sn_register_key: The data point key for reading SN (e.g., "device_sn")
+# model_register_key: The data point key to override with product name (default: "device_model")
+product_info:
+  default_name: "Anker SOLIX Smart Plug"
+  sn_register_key: "device_sn"  # Read SN from register 30005
+  model_register_key: "device_model"  # Override register 32768 display
+  product_code_mapping:
+    # Anker SOLIX Smart Plug
+    "QNA": "Anker SOLIX Smart Plug"
+
+batch_read_ranges:
+  - 30000-30036
+  - 32768-32772
+
+# =======================================================================
+# Read Quantities Configuration (Sensor Type)
+# =======================================================================
+read_quantities:
+  # Device information data points
+  device_model:
+    translation_key: "device_model"
+    address: 32768
+    data_type: "STRING"
+    unit: "/"
+    gain: 1
+    count: 5
+    icon: "mdi:information"
+
+  device_sn:
+    translation_key: "device_sn"
+    address: 30005
+    data_type: "STRING"
+    unit: "/"
+    gain: 1
+    count: 12
+    icon: "mdi:identifier"
+
+  # Real-time power data
+  real_time_power:
+    translation_key: "real_time_power"
+    address: 30030
+    data_type: "UINT16"
+    unit: "W"
+    gain: 10
+    count: 1
+    icon: "mdi:flash"
+
+  # Voltage
+  voltage:
+    translation_key: "voltage"
+    address: 30031
+    data_type: "UINT16"
+    unit: "V"
+    gain: 10
+    count: 1
+    icon: "mdi:sine-wave"
+
+  # Current
+  current:
+    translation_key: "current"
+    address: 30032
+    data_type: "UINT16"
+    unit: "A"
+    gain: 100
+    count: 1
+    icon: "mdi:current-ac"
+
+  # Switch status (read-only sensor for display)
+  switch_status:
+    translation_key: "switch_status"
+    address: 30029
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    icon: "mdi:power-plug"
+    value_mapping:
+      0: "disconnected"
+      1: "connected"
+
+# =======================================================================
+# Write Quantities Configuration (Control Type)
+# =======================================================================
+write_quantities:
+  enumeration_selection:
+    # Power on/off control
+    # Note: This switch uses separate read/write entities
+    # - read_entity_key (switch_status): Read state from this sensor
+    # - address (30047): Write-only control register for on/off commands
+    power_switch:
+      translation_key: "power_switch"
+      address: 30047
+      read_entity_key: "switch_status"
+      data_type: "UINT16"
+      unit: "/"
+      gain: 1
+      count: 1
+      icon: "mdi:power"
+      control_type: "switch"
+      options:
+        "0": "disabled"
+        "1": "enabled"
+
+# =============================================================================
+# Configuration Notes
+# =============================================================================
+# 1. Device PN is read from 0x8000 (32768) for device identification
+# 2. Switch status (30029) is read-only, shows current switch state
+# 3. Switch control (30047) is write-only, used to turn on/off the plug
+# 4. The write_protection mechanism prevents UI flash-back after control
+# =============================================================================
