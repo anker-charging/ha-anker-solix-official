@@ -1,0 +1,237 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anker Solix",
+        "description": "Veuillez entrer l'adresse IP de l'appareil Anker Solix (le port par défaut 502 sera utilisé automatiquement)",
+        "data": {
+          "ip_address": "Adresse IP"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Cette adresse IP est déjà configurée"
+    },
+    "error": {
+      "unknown": "Une erreur inconnue s'est produite",
+      "cannot_connect": "Impossible de se connecter à l'appareil via Modbus. Veuillez vérifier que l'adresse IP est correcte, que l'appareil est en ligne et que Modbus TCP est activé sur le port 502",
+      "invalid_ip": "Format d'adresse IPv4 invalide. Veuillez entrer une adresse IPv4 valide (par exemple : 192.168.1.100)",
+      "device_not_supported": "Appareil non pris en charge. Impossible de trouver le fichier de configuration correspondant à ce modèle d'appareil.",
+      "connection_timeout": "Délai de connexion dépassé. Veuillez vérifier que l'appareil est en ligne et accessible"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options Anker Solix",
+        "description": "Configurer les options Anker Solix"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "device_model": {
+        "name": "Modèle de l'appareil"
+      },
+      "device_sn": {
+        "name": "Numéro de série de l'appareil"
+      },
+      "device_sw_version": {
+        "name": "Version du firmware"
+      },
+      "device_pn": {
+        "name": "Numéro de pièce"
+      },
+      "battery_soc": {
+        "name": "SOC"
+      },
+      "battery_soh": {
+        "name": "État de santé de la batterie"
+      },
+      "pv_power": {
+        "name": "Énergie solaire"
+      },
+      "battery_charging_power": {
+        "name": "Puissance de charge de la batterie"
+      },
+      "battery_discharging_power": {
+        "name": "Puissance de décharge de la batterie"
+      },
+      "load_power": {
+        "name": "Accueil Chargement"
+      },
+      "grid_import_power": {
+        "name": "Puissance d'importation du réseau"
+      },
+      "grid_export_power": {
+        "name": "Puissance d'exportation du réseau"
+      },
+      "ac_grid_output_power": {
+        "name": "Sortie CA"
+      },
+      "pv_total_generation": {
+        "name": "Production solaire totale"
+      },
+      "total_consumption": {
+        "name": "Consommation totale"
+      },
+      "cumulative_charge_energy": {
+        "name": "Énergie de charge de la batterie"
+      },
+      "cumulative_discharge_energy": {
+        "name": "Énergie de décharge de la batterie"
+      },
+      "internal_temperature": {
+        "name": "Température interne"
+      },
+      "rated_energy": {
+        "name": "Autonomie de la batterie"
+      },
+      "power_station_status": {
+        "name": "État de la centrale",
+        "state": {
+          "unknown": "Inconnu",
+          "grid_tied": "Connecté au réseau",
+          "off_grid": "Hors réseau",
+          "standby": "Veille",
+          "fault": "Défaut"
+        }
+      },
+      "battery_status": {
+        "name": "Statut du périphérique",
+        "state": {
+          "standby": "Repos",
+          "charging": "Charge",
+          "discharging": "Décharge",
+          "sleep": "Mode veille"
+        }
+      },
+      "meter_model": {
+        "name": "Modèle de l'appareil"
+      },
+      "meter_type": {
+        "name": "Type de compteur",
+        "state": {
+          "single_phase": "Monophasé",
+          "three_phase": "Triphasé"
+        }
+      },
+      "meter_sn": {
+        "name": "Numéro de série de l'appareil"
+      },
+      "meter_sw_version": {
+        "name": "Version du firmware"
+      },
+      "primary_total_active_power": {
+        "name": "Puissance active totale du CT principal"
+      },
+      "primary_phase_1_active_power": {
+        "name": "Puissance active du CT principal Phase 1"
+      },
+      "primary_phase_1_current": {
+        "name": "Courant actif du CT principal Phase 1"
+      },
+      "primary_phase_1_voltage": {
+        "name": "Tension du CT principal Phase 1"
+      },
+      "primary_phase_2_active_power": {
+        "name": "Puissance active du CT principal Phase 2"
+      },
+      "primary_phase_2_current": {
+        "name": "Courant actif du CT principal Phase 2"
+      },
+      "primary_phase_2_voltage": {
+        "name": "Tension du CT principal Phase 2"
+      },
+      "primary_phase_3_active_power": {
+        "name": "Puissance active du CT principal Phase 3"
+      },
+      "primary_phase_3_current": {
+        "name": "Courant actif du CT principal Phase 3"
+      },
+      "primary_phase_3_voltage": {
+        "name": "Tension du CT principal Phase 3"
+      },
+      "secondary_total_active_power": {
+        "name": "Puissance active totale du CT secondaire"
+      },
+      "secondary_phase_1_active_power": {
+        "name": "Puissance active du CT secondaire Phase 1"
+      },
+      "secondary_phase_1_current": {
+        "name": "Courant actif du CT secondaire Phase 1"
+      },
+      "secondary_phase_1_voltage": {
+        "name": "Tension du CT secondaire Phase 1"
+      },
+      "secondary_phase_2_active_power": {
+        "name": "Puissance active du CT secondaire Phase 2"
+      },
+      "secondary_phase_2_current": {
+        "name": "Courant actif du CT secondaire Phase 2"
+      },
+      "secondary_phase_2_voltage": {
+        "name": "Tension du CT secondaire Phase 2"
+      },
+      "secondary_phase_3_active_power": {
+        "name": "Puissance active du CT secondaire Phase 3"
+      },
+      "secondary_phase_3_current": {
+        "name": "Courant actif du CT secondaire Phase 3"
+      },
+      "secondary_phase_3_voltage": {
+        "name": "Tension du CT secondaire Phase 3"
+      },
+      "real_time_power": {
+        "name": "Puissance active en temps réel"
+      },
+      "voltage": {
+        "name": "Tension en temps réel"
+      },
+      "current": {
+        "name": "Courant en temps réel"
+      },
+      "switch_status": {
+        "name": "État de l'interrupteur",
+        "state": {
+          "disconnected": "Éteindre",
+          "connected": "Allumer"
+        }
+      }
+    },
+    "select": {
+      "operating_mode": {
+        "name": "Mode de fonctionnement (L'appareil fonctionne en mode tiers)",
+        "state": {
+          "self_consumption": "Mode autoconsommation",
+          "tou_mode": "Mode de temps d'utilisation",
+          "custom_mode": "Mode personnalisé",
+          "socket_overlay_mode": "Mode superposition prise",
+          "third_party_control": "Contrôle par un tiers",
+          "smart_mode": "Mode intelligent",
+          "dynamic_pricing": "Mode de tarif dynamique"
+        }
+      },
+      "battery_power_direction": {
+        "name": "Contrôle de charge et de décharge",
+        "state": {
+          "charge": "Charge",
+          "discharge": "Décharge"
+        }
+      }
+    },
+    "number": {
+      "battery_charge_discharge_setpoint": {
+        "name": "Consigne charge/décharge batterie"
+      },
+      "battery_power_setpoint": {
+        "name": "Puissance de charge/décharge définie"
+      }
+    },
+    "switch": {
+      "power_switch": {
+        "name": "Interrupteur de prise"
+      }
+    }
+  }
+}

@@ -1,0 +1,258 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anker Solix",
+        "description": "Please enter the IP address of the Anker Solix device (default port 502 will be used automatically)",
+        "data": {
+          "ip_address": "IP Address"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This IP address is already configured"
+    },
+    "error": {
+      "unknown": "Unknown error occurred",
+      "cannot_connect": "Cannot connect to device via Modbus. Please check if the IP address is correct, the device is online, and Modbus TCP is enabled on port 502",
+      "invalid_ip": "Invalid IPv4 address format. Please enter a valid IPv4 address (e.g., 192.168.1.100)",
+      "device_not_supported": "Device not supported. Unable to find matching configuration file for this device model.",
+      "connection_timeout": "Connection timeout. Please check if the device is online and accessible"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Anker Solix Options",
+        "description": "Configure Anker Solix options"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "device_model": {
+        "name": "Device Model"
+      },
+      "device_sn": {
+        "name": "Device Serial Number"
+      },
+      "device_sw_version": {
+        "name": "Firmware Version"
+      },
+      "device_pn": {
+        "name": "Device PN"
+      },
+      "battery_soc": {
+        "name": "SOC"
+      },
+      "battery_soh": {
+        "name": "Battery SOH"
+      },
+      "pv_power": {
+        "name": "Solar Power"
+      },
+      "battery_charging_power": {
+        "name": "Battery Charging Power"
+      },
+      "battery_discharging_power": {
+        "name": "Battery Discharging Power"
+      },
+      "load_power": {
+        "name": "Home Load"
+      },
+      "grid_import_power": {
+        "name": "Grid Import Power"
+      },
+      "grid_export_power": {
+        "name": "Grid Export Power"
+      },
+      "ac_grid_output_power": {
+        "name": "AC Output"
+      },
+      "pv_total_generation": {
+        "name": "Total Solar Generation"
+      },
+      "total_consumption": {
+        "name": "Total Consumption"
+      },
+      "cumulative_charge_energy": {
+        "name": "Battery Charging Energy"
+      },
+      "cumulative_discharge_energy": {
+        "name": "Battery Discharge Energy"
+      },
+      "internal_temperature": {
+        "name": "Internal Temperature"
+      },
+      "rated_energy": {
+        "name": "Battery Capacity"
+      },
+      "power_station_status": {
+        "name": "Power Station Status",
+        "state": {
+          "unknown": "Unknown",
+          "grid_tied": "Grid-tied Operation",
+          "off_grid": "Off-grid Operation",
+          "standby": "Standby",
+          "fault": "Fault"
+        }
+      },
+      "battery_status": {
+        "name": "Device Status",
+        "state": {
+          "standby": "Idle",
+          "charging": "Charging",
+          "discharging": "Discharging",
+          "sleep": "Sleep"
+        }
+      },
+      "meter_model": {
+        "name": "Device Model"
+      },
+      "meter_type": {
+        "name": "Meter Type",
+        "state": {
+          "single_phase": "Single Phase",
+          "three_phase": "Three Phase"
+        }
+      },
+      "meter_sn": {
+        "name": "Device Serial Number"
+      },
+      "meter_sw_version": {
+        "name": "Firmware Version"
+      },
+      "primary_total_active_power": {
+        "name": "Main CT Total Active Power"
+      },
+      "primary_phase_1_active_power": {
+        "name": "Main CT Phase 1 Active Power"
+      },
+      "primary_phase_1_current": {
+        "name": "Main CT Phase 1 Active Current"
+      },
+      "primary_phase_1_voltage": {
+        "name": "Main CT Phase 1 Voltage"
+      },
+      "primary_phase_2_active_power": {
+        "name": "Main CT Phase 2 Active Power"
+      },
+      "primary_phase_2_current": {
+        "name": "Main CT Phase 2 Active Current"
+      },
+      "primary_phase_2_voltage": {
+        "name": "Main CT Phase 2 Voltage"
+      },
+      "primary_phase_3_active_power": {
+        "name": "Main CT Phase 3 Active Power"
+      },
+      "primary_phase_3_current": {
+        "name": "Main CT Phase 3 Active Current"
+      },
+      "primary_phase_3_voltage": {
+        "name": "Main CT Phase 3 Voltage"
+      },
+      "secondary_total_active_power": {
+        "name": "Secondary CT Total Active Power"
+      },
+      "secondary_phase_1_active_power": {
+        "name": "Secondary CT Phase 1 Active Power"
+      },
+      "secondary_phase_1_current": {
+        "name": "Secondary CT Phase 1 Active Current"
+      },
+      "secondary_phase_1_voltage": {
+        "name": "Secondary CT Phase 1 Voltage"
+      },
+      "secondary_phase_2_active_power": {
+        "name": "Secondary CT Phase 2 Active Power"
+      },
+      "secondary_phase_2_current": {
+        "name": "Secondary CT Phase 2 Active Current"
+      },
+      "secondary_phase_2_voltage": {
+        "name": "Secondary CT Phase 2 Voltage"
+      },
+      "secondary_phase_3_active_power": {
+        "name": "Secondary CT Phase 3 Active Power"
+      },
+      "secondary_phase_3_current": {
+        "name": "Secondary CT Phase 3 Active Current"
+      },
+      "secondary_phase_3_voltage": {
+        "name": "Secondary CT Phase 3 Voltage"
+      },
+      "real_time_power": {
+        "name": "Real-time Active Power"
+      },
+      "voltage": {
+        "name": "Real-time Voltage"
+      },
+      "current": {
+        "name": "Real-time Current"
+      },
+      "switch_status": {
+        "name": "Switch Status",
+        "state": {
+          "disconnected": "Turn Off",
+          "connected": "Turn On"
+        }
+      }
+    },
+    "select": {
+      "operating_mode": {
+        "name": "Operating Mode (Device runs by command in Third-Party Controlled)",
+        "state": {
+          "self_consumption": "Self-Consumption Mode",
+          "tou_mode": "Time Of Use Mode",
+          "custom_mode": "Custom Mode",
+          "socket_overlay_mode": "Socket Overlay Mode",
+          "third_party_control": "Third-Party Controlled",
+          "smart_mode": "Smart Mode",
+          "dynamic_pricing": "Dynamic Tariff Mode"
+        }
+      },
+      "battery_power_direction": {
+        "name": "Discharge Control",
+        "state": {
+          "charge": "Charge",
+          "discharge": "Discharge"
+        }
+      },
+      "export_power_control": {
+        "name": "Export Power Control Method",
+        "state": {
+          "disabled": "Disabled",
+          "percentage_control": "Percentage Control",
+          "fixed_value_control": "Fixed Value Control"
+        }
+      },
+      "power_on_off_control": {
+        "name": "Power On/Off Control",
+        "state": {
+          "power_on": "Power On",
+          "power_off": "Power Off"
+        }
+      }
+    },
+    "number": {
+      "battery_charge_discharge_setpoint": {
+        "name": "Battery Charge/Discharge Setpoint"
+      },
+      "battery_power_setpoint": {
+        "name": "Specified Charge/Discharge Power"
+      },
+      "ac_active_power_percent": {
+        "name": "Active Power Adjust Percentage"
+      }
+    },
+    "switch": {
+      "power_on_off_control": {
+        "name": "Output Switch"
+      },
+      "power_switch": {
+        "name": "Socket Switch"
+      }
+    }
+  }
+}
