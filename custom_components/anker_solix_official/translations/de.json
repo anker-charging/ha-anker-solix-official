@@ -1,0 +1,237 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anker Solix",
+        "description": "Bitte geben Sie die IP-Adresse des Anker Solix-Geräts ein (Standardport 502 wird automatisch verwendet)",
+        "data": {
+          "ip_address": "IP-Adresse"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Diese IP-Adresse ist bereits konfiguriert"
+    },
+    "error": {
+      "unknown": "Unbekannter Fehler aufgetreten",
+      "cannot_connect": "Verbindung zum Gerät über Modbus nicht möglich. Bitte überprüfen Sie, ob die IP-Adresse korrekt ist, das Gerät online ist und Modbus TCP auf Port 502 aktiviert ist",
+      "invalid_ip": "Ungültiges IPv4-Adressformat. Bitte geben Sie eine gültige IPv4-Adresse ein (z.B. 192.168.1.100)",
+      "device_not_supported": "Gerät wird nicht unterstützt. Keine passende Konfigurationsdatei für dieses Gerätemodell gefunden.",
+      "connection_timeout": "Verbindungszeitüberschreitung. Bitte überprüfen Sie, ob das Gerät online und erreichbar ist"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Anker Solix Optionen",
+        "description": "Anker Solix Optionen konfigurieren"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "device_model": {
+        "name": "Gerätemodell"
+      },
+      "device_sn": {
+        "name": "Geräte-Seriennummer"
+      },
+      "device_sw_version": {
+        "name": "Firmware-Version"
+      },
+      "device_pn": {
+        "name": "Geräte-PN"
+      },
+      "battery_soc": {
+        "name": "SOC"
+      },
+      "battery_soh": {
+        "name": "Batteriegesundheit"
+      },
+      "pv_power": {
+        "name": "Solarstrom"
+      },
+      "battery_charging_power": {
+        "name": "Batterieladeleistung"
+      },
+      "battery_discharging_power": {
+        "name": "Batterieentladeleistung"
+      },
+      "load_power": {
+        "name": "Startseite Last"
+      },
+      "grid_import_power": {
+        "name": "Netzbezugsleistung"
+      },
+      "grid_export_power": {
+        "name": "Netzeinspeiseleistung"
+      },
+      "ac_grid_output_power": {
+        "name": "AC-Ausgang"
+      },
+      "pv_total_generation": {
+        "name": "Gesamte Solarstromerzeugung"
+      },
+      "total_consumption": {
+        "name": "Gesamtverbrauch"
+      },
+      "cumulative_charge_energy": {
+        "name": "Batterie-Ladeenergie"
+      },
+      "cumulative_discharge_energy": {
+        "name": "Batterie-Entladeenergie"
+      },
+      "internal_temperature": {
+        "name": "Innentemperatur"
+      },
+      "rated_energy": {
+        "name": "Akkukapazität"
+      },
+      "power_station_status": {
+        "name": "Kraftwerksstatus",
+        "state": {
+          "unknown": "Unbekannt",
+          "grid_tied": "Netzgekoppelter Betrieb",
+          "off_grid": "Netzunabhängiger Betrieb",
+          "standby": "Bereitschaft",
+          "fault": "Fehler"
+        }
+      },
+      "battery_status": {
+        "name": "Gerätestatus",
+        "state": {
+          "standby": "Leerlauf",
+          "charging": "Laden",
+          "discharging": "Entladen",
+          "sleep": "Ruhemodus"
+        }
+      },
+      "meter_model": {
+        "name": "Gerätemodell"
+      },
+      "meter_type": {
+        "name": "Zählertyp",
+        "state": {
+          "single_phase": "Einphasig",
+          "three_phase": "Dreiphasig"
+        }
+      },
+      "meter_sn": {
+        "name": "Geräte-Seriennummer"
+      },
+      "meter_sw_version": {
+        "name": "Firmware-Version"
+      },
+      "primary_total_active_power": {
+        "name": "Haupt-CT-Gesamtwirkleistung"
+      },
+      "primary_phase_1_active_power": {
+        "name": "Haupt-CT Phase 1 Wirkleistung"
+      },
+      "primary_phase_1_current": {
+        "name": "Haupt-CT Phase 1 Strom"
+      },
+      "primary_phase_1_voltage": {
+        "name": "Haupt-CT Phase 1 Spannung"
+      },
+      "primary_phase_2_active_power": {
+        "name": "Haupt-CT Phase 2 Wirkleistung"
+      },
+      "primary_phase_2_current": {
+        "name": "Haupt-CT Phase 2 Strom"
+      },
+      "primary_phase_2_voltage": {
+        "name": "Haupt-CT Phase 2 Spannung"
+      },
+      "primary_phase_3_active_power": {
+        "name": "Haupt-CT Phase 3 Wirkleistung"
+      },
+      "primary_phase_3_current": {
+        "name": "Haupt-CT Phase 3 Strom"
+      },
+      "primary_phase_3_voltage": {
+        "name": "Haupt-CT Phase 3 Spannung"
+      },
+      "secondary_total_active_power": {
+        "name": "Sekundäre CT-Gesamtwirkleistung"
+      },
+      "secondary_phase_1_active_power": {
+        "name": "Sekundär-CT Phase 1 Wirkleistung"
+      },
+      "secondary_phase_1_current": {
+        "name": "Sekundär-CT Phase 1 Strom"
+      },
+      "secondary_phase_1_voltage": {
+        "name": "Sekundär-CT Phase 1 Spannung"
+      },
+      "secondary_phase_2_active_power": {
+        "name": "Sekundär-CT Phase 2 Wirkleistung"
+      },
+      "secondary_phase_2_current": {
+        "name": "Sekundär-CT Phase 2 Strom"
+      },
+      "secondary_phase_2_voltage": {
+        "name": "Sekundär-CT Phase 2 Spannung"
+      },
+      "secondary_phase_3_active_power": {
+        "name": "Sekundär-CT Phase 3 Wirkleistung"
+      },
+      "secondary_phase_3_current": {
+        "name": "Sekundär-CT Phase 3 Strom"
+      },
+      "secondary_phase_3_voltage": {
+        "name": "Sekundär-CT Phase 3 Spannung"
+      },
+      "real_time_power": {
+        "name": "Aktuelle Wirkleistung"
+      },
+      "voltage": {
+        "name": "Aktuelle Spannung"
+      },
+      "current": {
+        "name": "Aktueller Strom"
+      },
+      "switch_status": {
+        "name": "Schaltstatus",
+        "state": {
+          "disconnected": "Ausschalten",
+          "connected": "Einschalten"
+        }
+      }
+    },
+    "select": {
+      "operating_mode": {
+        "name": "Betriebsmodus (Gerät läuft im Drittanbieter-Steuermodus)",
+        "state": {
+          "self_consumption": "Eigenverbrauchsmodus",
+          "tou_mode": "Nutzungszeitmodus",
+          "custom_mode": "Benutzerdefinierter Modus",
+          "socket_overlay_mode": "Steckdosen-Overlay-Modus",
+          "third_party_control": "Drittanbieter-Steuerung",
+          "smart_mode": "Smart-Modus",
+          "dynamic_pricing": "Dynamischer Tarifmodus"
+        }
+      },
+      "battery_power_direction": {
+        "name": "Lade-/Entladesteuerung",
+        "state": {
+          "charge": "Laden",
+          "discharge": "Entladen"
+        }
+      }
+    },
+    "number": {
+      "battery_charge_discharge_setpoint": {
+        "name": "Batterie-Lade-/Entlade-Sollwert"
+      },
+      "battery_power_setpoint": {
+        "name": "Vorgegebene Lade-/Entladeleistung"
+      }
+    },
+    "switch": {
+      "power_switch": {
+        "name": "Steckdosenschalter"
+      }
+    }
+  }
+}

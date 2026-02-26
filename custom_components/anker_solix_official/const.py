@@ -1,0 +1,37 @@
+"""Constants definition."""
+
+DOMAIN = "anker_solix_official"
+
+# Timing constants (seconds)
+SCAN_INTERVAL = 5
+DEFAULT_TIMEOUT = 10
+CONNECTION_RETRY_DELAY = 10
+MODBUS_RESPONSE_TIMEOUT = 5
+COORDINATOR_UPDATE_INTERVAL = 5
+
+# Connection constants
+DEFAULT_MODBUS_PORT = 502
+DEFAULT_DEVICE_ID = 1
+MAX_RECONNECT_ATTEMPTS = 3
+CONNECTION_CHECK_INTERVAL = 30
+
+# Data reading constants
+BATCH_READ_GAP_THRESHOLD = 5
+MAX_REGISTERS_PER_READ = 100
+REGISTER_READ_RETRY_COUNT = 2
+
+# Logging constants
+LOG_THROTTLE_INTERVAL = 60
+LOG_THROTTLE_WINDOW = 300
+MAX_LOGS_PER_WINDOW = 10
+
+# File I/O constants
+CONFIG_FILE_ENCODING = "utf-8"
+YAML_LOAD_TIMEOUT = 5
+
+# Error messages
+ERROR_INVALID_IP = "invalid_ip"
+ERROR_CANNOT_CONNECT = "cannot_connect"
+ERROR_CONNECTION_TIMEOUT = "connection_timeout"
+ERROR_DEVICE_NOT_SUPPORTED = "device_not_supported"
+

@@ -1,0 +1,237 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anker Solix",
+        "description": "Voer het IP-adres van het Anker Solix-apparaat in (standaardpoort 502 wordt automatisch gebruikt)",
+        "data": {
+          "ip_address": "IP-adres"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Dit IP-adres is al geconfigureerd"
+    },
+    "error": {
+      "unknown": "Er is een onbekende fout opgetreden",
+      "cannot_connect": "Kan geen verbinding maken met het apparaat via Modbus. Controleer of het IP-adres correct is, het apparaat online is en Modbus TCP is ingeschakeld op poort 502",
+      "invalid_ip": "Ongeldig IPv4-adresformaat. Voer een geldig IPv4-adres in (bijv. 192.168.1.100)",
+      "device_not_supported": "Apparaat wordt niet ondersteund. Kan geen bijbehorend configuratiebestand vinden voor dit apparaatmodel.",
+      "connection_timeout": "Verbindingstime-out. Controleer of het apparaat online en bereikbaar is"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Anker Solix Opties",
+        "description": "Configureer Anker Solix opties"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "device_model": {
+        "name": "Apparaatmodel"
+      },
+      "device_sn": {
+        "name": "Serienummer van het apparaat"
+      },
+      "device_sw_version": {
+        "name": "Firmwareversie"
+      },
+      "device_pn": {
+        "name": "Onderdeelnummer"
+      },
+      "battery_soc": {
+        "name": "SOC"
+      },
+      "battery_soh": {
+        "name": "Batterijgezondheid"
+      },
+      "pv_power": {
+        "name": "Zonne-energie"
+      },
+      "battery_charging_power": {
+        "name": "Laadvermogen van de batterij"
+      },
+      "battery_discharging_power": {
+        "name": "Ontlaadvermogen van de batterij"
+      },
+      "load_power": {
+        "name": "Thuis Lading"
+      },
+      "grid_import_power": {
+        "name": "Afnemend vermogen van het net"
+      },
+      "grid_export_power": {
+        "name": "Teruggeleverd vermogen aan het net"
+      },
+      "ac_grid_output_power": {
+        "name": "AC-uitvoer"
+      },
+      "pv_total_generation": {
+        "name": "Totaal geproduceerde zonne-energie"
+      },
+      "total_consumption": {
+        "name": "Totaal verbruik"
+      },
+      "cumulative_charge_energy": {
+        "name": "Laadenergie van de batterij"
+      },
+      "cumulative_discharge_energy": {
+        "name": "Ontlaadenergie van de batterij"
+      },
+      "internal_temperature": {
+        "name": "Interne temperatuur"
+      },
+      "rated_energy": {
+        "name": "Accucapaciteit"
+      },
+      "power_station_status": {
+        "name": "Status energiecentrale",
+        "state": {
+          "unknown": "Onbekend",
+          "grid_tied": "Netgekoppeld",
+          "off_grid": "Eilandbedrijf",
+          "standby": "Stand-by",
+          "fault": "Storing"
+        }
+      },
+      "battery_status": {
+        "name": "Apparaatstatus",
+        "state": {
+          "standby": "Idle",
+          "charging": "Opladen",
+          "discharging": "Ontladen",
+          "sleep": "Slaapstand"
+        }
+      },
+      "meter_model": {
+        "name": "Apparaatmodel"
+      },
+      "meter_type": {
+        "name": "Metertype",
+        "state": {
+          "single_phase": "Enkelfasig",
+          "three_phase": "Driefasig"
+        }
+      },
+      "meter_sn": {
+        "name": "Serienummer van het apparaat"
+      },
+      "meter_sw_version": {
+        "name": "Firmwareversie"
+      },
+      "primary_total_active_power": {
+        "name": "Totale actieve vermogen van de hoofd-CT"
+      },
+      "primary_phase_1_active_power": {
+        "name": "Hoofd-CT Fase 1 actief vermogen"
+      },
+      "primary_phase_1_current": {
+        "name": "Hoofd-CT Fase 1 stroom"
+      },
+      "primary_phase_1_voltage": {
+        "name": "Hoofd-CT Fase 1 spanning"
+      },
+      "primary_phase_2_active_power": {
+        "name": "Hoofd-CT Fase 2 actief vermogen"
+      },
+      "primary_phase_2_current": {
+        "name": "Hoofd-CT Fase 2 stroom"
+      },
+      "primary_phase_2_voltage": {
+        "name": "Hoofd-CT Fase 2 spanning"
+      },
+      "primary_phase_3_active_power": {
+        "name": "Hoofd-CT Fase 3 actief vermogen"
+      },
+      "primary_phase_3_current": {
+        "name": "Hoofd-CT Fase 3 stroom"
+      },
+      "primary_phase_3_voltage": {
+        "name": "Hoofd-CT Fase 3 spanning"
+      },
+      "secondary_total_active_power": {
+        "name": "Totale actieve vermogen van de secundaire CT"
+      },
+      "secondary_phase_1_active_power": {
+        "name": "Secundaire CT Fase 1 actief vermogen"
+      },
+      "secondary_phase_1_current": {
+        "name": "Secundaire CT Fase 1 stroom"
+      },
+      "secondary_phase_1_voltage": {
+        "name": "Secundaire CT Fase 1 spanning"
+      },
+      "secondary_phase_2_active_power": {
+        "name": "Secundaire CT Fase 2 actief vermogen"
+      },
+      "secondary_phase_2_current": {
+        "name": "Secundaire CT Fase 2 stroom"
+      },
+      "secondary_phase_2_voltage": {
+        "name": "Secundaire CT Fase 2 spanning"
+      },
+      "secondary_phase_3_active_power": {
+        "name": "Secundaire CT Fase 3 actief vermogen"
+      },
+      "secondary_phase_3_current": {
+        "name": "Secundaire CT Fase 3 stroom"
+      },
+      "secondary_phase_3_voltage": {
+        "name": "Secundaire CT Fase 3 spanning"
+      },
+      "real_time_power": {
+        "name": "Actief vermogen in realtime"
+      },
+      "voltage": {
+        "name": "Spanning in realtime"
+      },
+      "current": {
+        "name": "Stroom in realtime"
+      },
+      "switch_status": {
+        "name": "Schakelaarstatus",
+        "state": {
+          "disconnected": "Uitschakelen",
+          "connected": "Inschakelen"
+        }
+      }
+    },
+    "select": {
+      "operating_mode": {
+        "name": "Bedrijfsmodus (Apparaat werkt in externe modus)",
+        "state": {
+          "self_consumption": "Modus Eigen verbruik",
+          "tou_mode": "Gebruikstijdmodus",
+          "custom_mode": "Aangepaste modus",
+          "socket_overlay_mode": "Stopcontact overlay modus",
+          "third_party_control": "Externe besturing",
+          "smart_mode": "Slimme modus",
+          "dynamic_pricing": "Dynamisch tarief-modus"
+        }
+      },
+      "battery_power_direction": {
+        "name": "Laad-/ontlaadregeling",
+        "state": {
+          "charge": "Opladen",
+          "discharge": "Ontladen"
+        }
+      }
+    },
+    "number": {
+      "battery_charge_discharge_setpoint": {
+        "name": "Batterij laad-/ontlaadinstelpunt"
+      },
+      "battery_power_setpoint": {
+        "name": "Ingestelde laad-/ontlaadvermogen"
+      }
+    },
+    "switch": {
+      "power_switch": {
+        "name": "Stopcontactschakelaar"
+      }
+    }
+  }
+}
