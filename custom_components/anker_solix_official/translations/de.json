@@ -28,6 +28,14 @@
       }
     }
   },
+  "exceptions": {
+    "charge_power_too_low": {
+      "message": "Die verfügbare Ladeleistung des Geräts beträgt nur {power} W (Mindestanforderung: 100 W), daher kann die Ladeleistung nicht eingestellt werden. Bitte überprüfen Sie das Gerät."
+    },
+    "discharge_power_too_low": {
+      "message": "Die verfügbare Entladeleistung des Geräts beträgt nur {power} W (Mindestanforderung: 100 W), daher kann die Entladeleistung nicht eingestellt werden. Bitte überprüfen Sie das Gerät."
+    }
+  },
   "entity": {
     "sensor": {
       "device_model": {

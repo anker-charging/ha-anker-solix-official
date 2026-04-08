@@ -49,6 +49,7 @@ class ConnectionStateMachine:
         ],
         ConnectionState.ERROR: [
             ConnectionState.RECONNECTING,
+            ConnectionState.CONNECTING,
             ConnectionState.DISCONNECTED,
             ConnectionState.CLOSING,
         ],

@@ -28,6 +28,14 @@
       }
     }
   },
+  "exceptions": {
+    "charge_power_too_low": {
+      "message": "The device's available charging power is only {power} W (minimum required: 100 W), so the charging power cannot be set. Please check the device."
+    },
+    "discharge_power_too_low": {
+      "message": "The device's available discharging power is only {power} W (minimum required: 100 W), so the discharging power cannot be set. Please check the device."
+    }
+  },
   "entity": {
     "sensor": {
       "device_model": {
