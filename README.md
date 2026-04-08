@@ -21,6 +21,8 @@ This integration connects to your Anker Solix devices **locally** via Modbus TCP
 ## Supported Devices
 
 - Anker SOLIX Smart Plug
+- Anker SOLIX Solarbank Max AC
+- Anker SOLIX Smart Meter Gen 2
 
 More Anker Solix devices are being added progressively. Stay tuned for updates.
 
