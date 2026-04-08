@@ -28,6 +28,14 @@
       }
     }
   },
+  "exceptions": {
+    "charge_power_too_low": {
+      "message": "Het beschikbare laadvermogen van het apparaat is slechts {power} W (minimum vereist: 100 W), dus het laadvermogen kan niet worden ingesteld. Controleer het apparaat."
+    },
+    "discharge_power_too_low": {
+      "message": "Het beschikbare ontlaadvermogen van het apparaat is slechts {power} W (minimum vereist: 100 W), dus het ontlaadvermogen kan niet worden ingesteld. Controleer het apparaat."
+    }
+  },
   "entity": {
     "sensor": {
       "device_model": {
