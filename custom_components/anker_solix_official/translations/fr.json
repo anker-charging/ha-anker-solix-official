@@ -28,6 +28,14 @@
       }
     }
   },
+  "exceptions": {
+    "charge_power_too_low": {
+      "message": "La puissance de charge disponible de l'appareil n'est que de {power} W (minimum requis : 100 W), la puissance de charge ne peut donc pas être réglée. Veuillez vérifier l'appareil."
+    },
+    "discharge_power_too_low": {
+      "message": "La puissance de décharge disponible de l'appareil n'est que de {power} W (minimum requis : 100 W), la puissance de décharge ne peut donc pas être réglée. Veuillez vérifier l'appareil."
+    }
+  },
   "entity": {
     "sensor": {
       "device_model": {

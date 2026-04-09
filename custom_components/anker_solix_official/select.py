@@ -31,7 +31,9 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up select platform."""
-    coordinator: AnkerSolixOfficialCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator: AnkerSolixOfficialCoordinator = hass.data[DOMAIN][
+        config_entry.entry_id
+    ]
 
     await async_setup_entities_with_retry(
         hass=hass,
@@ -63,7 +65,9 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
         options = config.get("options", {})
         self._all_options = options  # value -> translation_key
         self._all_translation_keys = list(options.values())
-        self._options_map = {v: k for k, v in options.items()}  # translation_key -> value
+        self._options_map = {
+            v: k for k, v in options.items()
+        }  # translation_key -> value
         self._reverse_options_map = options  # value -> translation_key
 
         # Capability filtering config
@@ -110,7 +114,10 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
             else:
                 _LOGGER.debug(
                     "Option %s (value=%s) filtered out: BIT%d not set in mask 0x%04X",
-                    translation_key, value, bit_position, mask
+                    translation_key,
+                    value,
+                    bit_position,
+                    mask,
                 )
         return filtered
 
@@ -173,7 +180,7 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
                 self.coordinator.set_user_selection(self._entity_key, default_direction)
                 _LOGGER.info(
                     "Auto-selected default direction: %s (user can change it)",
-                    default_direction
+                    default_direction,
                 )
                 # Log to HA logbook to inform user (only once)
                 if not self._default_direction_logged:
@@ -195,7 +202,9 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
             return user_selection
 
         # For normal select entities: check write protection first
-        is_protected, protected_value = self.coordinator.get_protected_value(self._entity_key)
+        is_protected, protected_value = self.coordinator.get_protected_value(
+            self._entity_key
+        )
         if is_protected and protected_value is not None:
             return protected_value
 
@@ -210,15 +219,36 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Select option."""
-        # For direction selector: only store user's selection (no register write)
+        # For direction selector: store selection and auto-rewrite power register
         if self._config.get("is_direction_selector"):
             # Store user's selection (persists until user changes it or HA restarts)
             self.coordinator.set_user_selection(self._entity_key, option)
             self.async_write_ha_state()
-            _LOGGER.info(
-                "Direction selector %s set to '%s' (stored in memory, not written to device)",
-                self._entity_key, option
+
+            # Log to HA logbook + log (same as other control operations)
+            device_name = self.coordinator.device_name or "Anker Solix"
+            entity_name = self.name or self._entity_key
+            display_option = option.replace("_", " ").title()
+            log_message = f"{entity_name} → {display_option}"
+
+            await self.coordinator.hass.services.async_call(
+                "logbook",
+                "log",
+                {
+                    "name": device_name,
+                    "message": log_message,
+                    "entity_id": self.entity_id,
+                    "domain": DOMAIN,
+                },
+                blocking=False,
             )
+
+            _LOGGER.info("📝 %s %s → %s", device_name, entity_name, display_option)
+
+            # Auto-rewrite power register with new direction sign
+            # Find the power entity that uses this direction selector
+            await self._auto_rewrite_power_on_direction_change(option)
+
             return
 
         # Convert translation key to numeric value
@@ -236,48 +266,211 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
             address = int(address)
             value = int(value)
         except (ValueError, TypeError) as e:
-            _LOGGER.error("Invalid address or value for select %s: %s", self._entity_key, e)
+            _LOGGER.error(
+                "Invalid address or value for select %s: %s", self._entity_key, e
+            )
             return
 
         data_type = self._config.get("data_type", "UINT16")
 
-        _LOGGER.info(
+        dlog = self.coordinator.device_logger
+
+        dlog.warning(
             "Writing select %s | address=%d (0x%04X), option='%s', value=%d, data_type=%s",
-            self._entity_key, address, address, option, value, data_type
+            self._entity_key,
+            address,
+            address,
+            option,
+            value,
+            data_type,
         )
 
         try:
-            success = await self.coordinator.modbus_manager.write_register(
+            result = await self.coordinator.modbus_manager.write_register(
                 address, value, data_type
             )
 
-            if success:
-                _LOGGER.info(
+            if result.success:
+                dlog.warning(
                     "Write select SUCCESS | %s: option='%s', value=%d, address=%d (0x%04X)",
-                    self._entity_key, option, value, address, address
+                    self._entity_key,
+                    option,
+                    value,
+                    address,
+                    address,
                 )
 
-                # Enable write protection to prevent UI flashing during mode transition
-                # Device may take several seconds to process mode change
-                protection_duration = self._config.get("write_protection_duration", 15.0)
+                protection_duration = self._config.get(
+                    "write_protection_duration", 15.0
+                )
                 self.coordinator.set_write_protection(
                     self._entity_key, option, protection_duration
                 )
 
-                # Update UI immediately with user's selection
                 self.async_write_ha_state()
 
-                # Note: Do NOT call async_request_refresh() here
-                # Let the normal 5-second polling update the value after protection expires
+                device_name = self.coordinator.device_name or "Anker Solix"
+                entity_name = self.name or self._entity_key
+                display_option = option.replace("_", " ").title()
+                log_message = f"{entity_name} → {display_option}"
+
+                await self.coordinator.hass.services.async_call(
+                    "logbook",
+                    "log",
+                    {
+                        "name": device_name,
+                        "message": log_message,
+                        "entity_id": self.entity_id,
+                        "domain": DOMAIN,
+                    },
+                    blocking=False,
+                )
+
+                dlog.warning("📝 %s → %s", entity_name, display_option)
             else:
-                _LOGGER.error(
-                    "Write select FAILED | %s: option='%s', value=%d, address=%d (0x%04X), result=False",
-                    self._entity_key, option, value, address, address
+                dlog.error(
+                    "Write select FAILED | entity=%s, option='%s', value=%d, address=%d (0x%04X), "
+                    "reason=%s, raw_response=%s, tx_frame=%s",
+                    self._entity_key,
+                    option,
+                    value,
+                    address,
+                    address,
+                    result.error_reason,
+                    result.raw_response or "N/A",
+                    result.tx_frame or "N/A",
                 )
         except Exception as e:
-            _LOGGER.error(
+            dlog.error(
                 "Write select EXCEPTION | %s: option='%s', value=%d, address=%d (0x%04X), error=%s",
-                self._entity_key, option, value, address, address, e
+                self._entity_key,
+                option,
+                value,
+                address,
+                address,
+                e,
+            )
+
+    async def _auto_rewrite_power_on_direction_change(self, new_direction: str) -> None:
+        """Auto-rewrite power register when direction changes.
+
+        When user switches charge/discharge direction, the power register
+        must be rewritten with the new sign. Otherwise the device continues
+        with the old direction until the user manually re-submits the power value.
+
+        Args:
+            new_direction: "charge" or "discharge"
+        """
+        try:
+            # Find the power entity that references this direction selector
+            config_cache = self.coordinator._full_config_cache
+            if not config_cache:
+                _LOGGER.debug("No config cache, skip auto-rewrite")
+                return
+
+            control_items = config_cache.get("control_items", {})
+            power_entity_key = None
+            power_config = None
+
+            for entity_key, config in control_items.items():
+                if config.get("direction_entity") == self._entity_key:
+                    power_entity_key = entity_key
+                    power_config = config
+                    break
+
+            if not power_entity_key or not power_config:
+                _LOGGER.debug(
+                    "No power entity linked to direction selector %s", self._entity_key
+                )
+                return
+
+            # Get current power value from user_selections
+            current_power = self.coordinator.get_user_selection(power_entity_key)
+            if current_power is None or current_power == 0:
+                _LOGGER.debug(
+                    "No power value set for %s (value=%s), skip auto-rewrite",
+                    power_entity_key,
+                    current_power,
+                )
+                return
+
+            # Calculate write value with new direction sign
+            power_value = abs(float(current_power))
+            gain = power_config.get("gain", 1)
+            write_value = power_value * gain
+
+            if new_direction == "charge":
+                write_value = -abs(write_value)
+            else:
+                write_value = abs(write_value)
+
+            address = int(power_config.get("address"))
+            data_type = power_config.get("data_type", "INT32")
+
+            _LOGGER.info(
+                "🔄 Direction changed to '%s', auto-rewriting power register: "
+                "address=%d (0x%04X), power=%s, write_value=%s",
+                new_direction,
+                address,
+                address,
+                current_power,
+                int(write_value),
+            )
+
+            result = await self.coordinator.modbus_manager.write_register(
+                address,
+                int(write_value),
+                data_type,
+            )
+
+            if result.success:
+                # Update write protection to prevent UI flash-back
+                protection_duration = power_config.get(
+                    "write_protection_duration", 10.0
+                )
+                self.coordinator.set_write_protection(
+                    power_entity_key, current_power, protection_duration
+                )
+
+                # Log to HA logbook
+                device_name = self.coordinator.device_name or "Anker Solix"
+                direction_label = "Charge" if new_direction == "charge" else "Discharge"
+                unit = power_config.get("unit", "W")
+                log_message = f"Direction changed → auto-rewrite: [{direction_label}] {int(power_value)} {unit}"
+
+                await self.coordinator.hass.services.async_call(
+                    "logbook",
+                    "log",
+                    {
+                        "name": device_name,
+                        "message": log_message,
+                        "entity_id": self.entity_id,
+                        "domain": DOMAIN,
+                    },
+                    blocking=False,
+                )
+
+                _LOGGER.info(
+                    "📝 %s Direction changed → auto-rewrite: [%s] %s %s",
+                    device_name,
+                    direction_label,
+                    int(power_value),
+                    unit,
+                )
+            else:
+                _LOGGER.warning(
+                    "Auto-rewrite power register FAILED after direction change: "
+                    "address=%d, write_value=%s, reason=%s",
+                    address,
+                    int(write_value),
+                    result.error_reason,
+                )
+
+        except Exception as e:
+            _LOGGER.error(
+                "Error during auto-rewrite power on direction change: %s",
+                e,
+                exc_info=True,
             )
 
     @property

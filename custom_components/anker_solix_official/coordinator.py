@@ -19,6 +19,7 @@ from .config_utils import parse_device_configuration
 from .async_resource_manager import AsyncResourceManager
 from .throttled_logger import ThrottledLogger
 from .product_mapping import get_product_name_from_config
+from .device_logger import DeviceLoggerAdapter
 
 
 class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
@@ -26,38 +27,48 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
         """Initialize coordinator."""
+        device_name = entry.data.get("device_name", "Modbus Virtual Device")
+        ip_address = entry.data.get("ip_address", "127.0.0.1")
+        port = entry.data.get("port", 502)
+
         super().__init__(
             hass,
             logging.getLogger(__name__),
-            name=f"{DOMAIN}_{entry.entry_id}",
+            name=f"{DOMAIN}_{device_name}_{ip_address}",
             update_interval=timedelta(seconds=SCAN_INTERVAL),
         )
 
         self.entry = entry
-        # Alias for compatibility with entities using config_entry
         self.config_entry = entry
-        self.device_name = entry.data.get("device_name", "Modbus Virtual Device")
-        self.ip_address = entry.data.get("ip_address", "127.0.0.1")
-        self.port = entry.data.get("port", 502)
+        self.device_name = device_name
+        self.ip_address = ip_address
+        self.port = port
         self.scan_interval = SCAN_INTERVAL
 
-        # Initialize device configuration manager
+        self.device_logger = DeviceLoggerAdapter(
+            logging.getLogger(__name__),
+            device_name=self.device_name,
+            device_ip=self.ip_address,
+            device_port=self.port,
+        )
+
         self.device_config = AnkerSolixDeviceConfig(hass)
 
-        # Initialize device-specific modbus connection manager
         self.modbus_manager = ModbusConnectionManager()
-        self.modbus_manager.initialize(self.ip_address, self.port)
+        self.modbus_manager.initialize(self.ip_address, self.port, self.device_name)
 
-        # Use SCAN_INTERVAL constant
         self.update_interval = timedelta(seconds=self.scan_interval)
-        self.logger.info("Coordinator initialized for %s:%d (scan interval: %ds)",
-                        self.ip_address, self.port, self.scan_interval)
-        
+        self.device_logger.warning(
+            "Coordinator initialized (scan interval: %ds)", self.scan_interval
+        )
+
         # Device configuration cache
         self._device_config_cache = None
         self._batch_ranges_cache = None
         self._config_cache_valid = False
-        self._full_config_cache = None  # Store full YAML config (including product_info)
+        self._full_config_cache = (
+            None  # Store full YAML config (including product_info)
+        )
         # Background connection/data loop
         self._bg_task = None
         self._stop_bg = False
@@ -83,13 +94,18 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         self._user_selections: dict[str, Any] = {}
 
         # Use throttled logger to reduce log spam
-        self._throttled_logger = ThrottledLogger(self.logger, default_interval=LOG_THROTTLE_INTERVAL)
+        self._throttled_logger = ThrottledLogger(
+            self.logger, default_interval=LOG_THROTTLE_INTERVAL
+        )
 
         # Connection state tracking (initialize before reading device model)
         self._connection_failed = False
         self._last_connection_attempt = 0
         self._connection_retry_interval = CONNECTION_RETRY_DELAY
         self._consecutive_failures = 0
+        self._device_unavailable_logged = (
+            False  # HA best practice: log once on unavailable
+        )
 
         # Device information - defer model detection until connection is established
         device_model = "--"
@@ -109,14 +125,17 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                         if not self._bg_task or self._bg_task.done():
                             # Use resource manager to track background task
                             self._bg_task = self._resource_manager.create_task(
-                                self._connection_loop(),
-                                name="connection_loop"
+                                self._connection_loop(), name="connection_loop"
                             )
                     except Exception:
                         pass
 
                 # Prefer thread-safe scheduling using the main event loop
-                if hasattr(self.hass, "loop") and self.hass.loop and self.hass.loop.is_running():
+                if (
+                    hasattr(self.hass, "loop")
+                    and self.hass.loop
+                    and self.hass.loop.is_running()
+                ):
                     try:
                         self.hass.loop.call_soon_threadsafe(_spawn_task)
                     except Exception:
@@ -128,7 +147,10 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                 pass
 
         try:
-            if getattr(self.hass, "is_running", False) or getattr(self.hass, "state", None) == CoreState.running:
+            if (
+                getattr(self.hass, "is_running", False)
+                or getattr(self.hass, "state", None) == CoreState.running
+            ):
                 _start_bg()
             else:
                 self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _start_bg)
@@ -159,7 +181,9 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         self._protected_values[entity_key] = (protected_until, protected_value)
         self.logger.debug(
             "Write protection enabled for %s (value=%s) for %.1f seconds",
-            entity_key, protected_value, duration
+            entity_key,
+            protected_value,
+            duration,
         )
 
     def get_protected_value(self, entity_key: str) -> tuple[bool, Any]:
@@ -201,10 +225,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
             value: User's selected value
         """
         self._user_selections[entity_key] = value
-        self.logger.debug(
-            "User selection stored for %s: %s",
-            entity_key, value
-        )
+        self.logger.debug("User selection stored for %s: %s", entity_key, value)
 
     def get_user_selection(self, entity_key: str) -> Any | None:
         """Get user's selection for control entities.
@@ -248,18 +269,14 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                 product_name = get_product_name_from_config(
                     sn=sn_clean,
                     device_config=self._full_config_cache,
-                    fallback_name=None
+                    fallback_name=None,
                 )
                 self.logger.debug(
-                    "Product name from SN %s***: %s",
-                    sn_clean[:6], product_name
+                    "Product name from SN %s***: %s", sn_clean[:6], product_name
                 )
             else:
                 product_name = product_info.get("default_name", "Unknown Device")
-                self.logger.debug(
-                    "No SN, using default_name: %s",
-                    product_name
-                )
+                self.logger.debug("No SN, using default_name: %s", product_name)
 
             # Get model register key (which data point to override)
             model_register_key = product_info.get("model_register_key", "device_model")
@@ -271,7 +288,9 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                     data[model_register_key] = product_name
                     self.logger.info(
                         "📝 Overrode %s sensor: %s → %s",
-                        model_register_key, old_value, product_name
+                        model_register_key,
+                        old_value,
+                        product_name,
                     )
 
             # Update device_info for device registry
@@ -279,37 +298,131 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                 self.device_info["model"] = product_name
                 self.logger.debug("Updated device_info model: %s", product_name)
 
+            # Update device name: "Product Name (SN末3位)" replaces generic "Anker Solix Device IP"
+            if product_name:
+                sn_suffix = sn_clean[-3:] if len(sn_clean) >= 3 else sn_clean
+                if sn_suffix:
+                    friendly_name = f"{product_name} ({sn_suffix})"
+                else:
+                    friendly_name = product_name
+                if (
+                    self.device_name != friendly_name
+                    or self.entry.title != friendly_name
+                ):
+                    old_name = self.device_name
+                    self.device_name = friendly_name
+                    self.device_info["name"] = friendly_name
+                    self.logger.info(
+                        "Device name updated: %s → %s", old_name, friendly_name
+                    )
+                    # Also update config entry title (shown in Hubs list)
+                    self.hass.config_entries.async_update_entry(
+                        self.entry, title=friendly_name
+                    )
+
         except Exception as e:
-            self.logger.error("Failed to override model with product name: %s", e, exc_info=True)
+            self.logger.error(
+                "Failed to override model with product name: %s", e, exc_info=True
+            )
+
+    async def _auto_set_mode_on_connect(self, data: dict[str, Any]) -> None:
+        """Auto-set operating mode on first connect if configured in YAML.
+
+        Writes the mode BEFORE data is published to HA, so UI shows
+        the target mode from the first frame (zero flicker).
+        """
+        try:
+            if not self._full_config_cache:
+                return
+
+            product_info = self._full_config_cache.get("product_info", {})
+            auto_mode = product_info.get("auto_mode_on_connect")
+            if auto_mode is None:
+                return
+
+            auto_mode = int(auto_mode)
+
+            # Find operating_mode config to get register address
+            write_quantities = self._full_config_cache.get("write_quantities", {})
+            enum_selection = write_quantities.get("enumeration_selection", {})
+            mode_config = enum_selection.get("operating_mode")
+            if not mode_config:
+                self.logger.debug("No operating_mode config found, skip auto-set")
+                return
+
+            address = int(mode_config.get("address"))
+            data_type = mode_config.get("data_type", "UINT16")
+
+            # Check current mode — skip if already in target mode
+            current_mode = data.get("operating_mode")
+            if current_mode is not None and int(current_mode) == auto_mode:
+                self.logger.info(
+                    "Device already in target mode %d, skip auto-set", auto_mode
+                )
+                return
+
+            # Write target mode to device
+            self.logger.info(
+                "Auto-setting operating mode to %d on first connect (address=%d)",
+                auto_mode,
+                address,
+            )
+
+            async with self._io_lock:
+                success = await self.modbus_manager.write_register(
+                    address, auto_mode, data_type
+                )
+
+            if success:
+                # Update data dict so UI first frame shows target mode
+                data["operating_mode"] = auto_mode
+
+                # Set write protection with translation key (not numeric value)
+                # select entity's current_option returns translation keys, not numbers
+                options = mode_config.get("options", {})
+                translation_key = options.get(str(auto_mode), auto_mode)
+                protection = mode_config.get("write_protection_duration", 15.0)
+                self.set_write_protection("operating_mode", translation_key, protection)
+
+                self.logger.info("Auto-set operating mode to %d succeeded", auto_mode)
+            else:
+                self.logger.warning("Auto-set operating mode to %d FAILED", auto_mode)
+
+        except Exception as e:
+            self.logger.error("Error in auto-set mode on connect: %s", e)
 
     def _should_attempt_reconnection(self) -> bool:
         """Check if reconnection should be attempted."""
         current_time = time.time()
-        
+
         # If connection is normal, no need to reconnect
         if not self._connection_failed:
             return False
-            
+
         # Check reconnection interval first (most important for quick recovery)
         time_since_last_attempt = current_time - self._last_connection_attempt
         if time_since_last_attempt < self._connection_retry_interval:
             return False
-            
-            
+
         return True
 
     def _handle_connection_failure(self, error_msg: str):
-        """Handle connection failure."""
+        """Handle connection failure with HA best-practice logging.
+
+        HA Integration Quality Scale rule 'log-when-unavailable':
+        Log once at INFO when device becomes unavailable, then stay silent.
+        Log once at INFO when device comes back online.
+        """
         current_time = time.time()
         self._consecutive_failures += 1
         self._last_failure_time = current_time
         self._connection_failed = True
         self._status = "disconnected"
-        # Clear latest data snapshot to avoid stale values
         self._latest_data = {}
-        self._config_cache_valid = False
-        self._device_config_cache = None
-        self._batch_ranges_cache = None
+
+        # Immediately notify HA that data is no longer valid
+        # This makes entities show "unavailable" instead of stale values
+        self.async_set_updated_data({})
 
         # Force disconnect modbus connection to ensure clean reconnection
         try:
@@ -317,16 +430,28 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         except Exception as e:
             self.logger.debug("Error during force disconnect: %s", e)
 
-        # Use throttled logger for repeated connection failures
-        if self._consecutive_failures == 1:
-            self.logger.error("Connection failed: %s", error_msg)
-        else:
-            self._throttled_logger.warning(
-                "Connection failure #%d: %s",
-                self._consecutive_failures,
+        # HA best practice: log only ONCE when device becomes unavailable
+        if not self._device_unavailable_logged:
+            self.logger.info(
+                "Device %s is unavailable: %s (will retry with backoff)",
+                self.ip_address,
                 error_msg,
-                throttle_key="connection_failure"
             )
+            self._device_unavailable_logged = True
+        else:
+            self.logger.debug(
+                "Connection failure #%d: %s", self._consecutive_failures, error_msg
+            )
+
+        # Exponential backoff: 10s → 30s → 60s → 300s (max)
+        if self._consecutive_failures <= 3:
+            self._connection_retry_interval = CONNECTION_RETRY_DELAY  # 10s
+        elif self._consecutive_failures <= 10:
+            self._connection_retry_interval = 30
+        elif self._consecutive_failures <= 30:
+            self._connection_retry_interval = 60
+        else:
+            self._connection_retry_interval = 300
 
     async def _read_device_pn(self) -> tuple[str, str, str]:
         """Read device PN from register 0x8000 (32768) using unified method.
@@ -340,29 +465,46 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                 result = await self.modbus_manager.read_device_pn()
                 pn_hash, raw_pn, raw_hex = result
                 if pn_hash:
-                    self.logger.info("Device PN read successfully - Raw PN: '%s', MD5: '%s', Registers: [%s]",
-                                    raw_pn, pn_hash, raw_hex)
+                    self.logger.info(
+                        "Device PN read successfully - Raw PN: '%s', MD5: '%s', Registers: [%s]",
+                        raw_pn,
+                        pn_hash,
+                        raw_hex,
+                    )
                 else:
-                    self.logger.warning("Failed to read device PN - Raw: '%s', Registers: [%s]", raw_pn, raw_hex)
+                    self.logger.warning(
+                        "Failed to read device PN - Raw: '%s', Registers: [%s]",
+                        raw_pn,
+                        raw_hex,
+                    )
                 return result
         except Exception as e:
-            self.logger.error("Exception reading device PN: %s (type: %s)", e, type(e).__name__)
+            self.logger.error(
+                "Exception reading device PN: %s (type: %s)", e, type(e).__name__
+            )
             return ("", "", "")
 
     async def _get_config_file_path(self) -> str:
         """Get configuration file path based on device PN."""
         pn_hash, raw_pn, raw_hex = await self._read_device_pn()
         if not pn_hash:
-            self.logger.error("Cannot determine device PN, unable to load configuration")
+            self.logger.error(
+                "Cannot determine device PN, unable to load configuration"
+            )
             return ""
 
         # Check if device-specific config exists
         config_file = f"config/{pn_hash}.yaml"
         from pathlib import Path
+
         config_path = Path(__file__).resolve().parent / config_file
 
-        self.logger.debug("Looking for config file - PN='%s', path='%s', exists=%s",
-                         pn_hash, config_path, config_path.exists())
+        self.logger.debug(
+            "Looking for config file - PN='%s', path='%s', exists=%s",
+            pn_hash,
+            config_path,
+            config_path.exists(),
+        )
 
         if config_path.exists():
             self.logger.info("Found device-specific config: %s", config_file)
@@ -371,11 +513,17 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
             self.logger.error(
                 "Device PN '%s' is not supported - Raw PN: '%s', Registers: [%s], "
                 "config file %s not found at %s",
-                pn_hash, raw_pn, raw_hex, config_file, config_path
+                pn_hash,
+                raw_pn,
+                raw_hex,
+                config_file,
+                config_path,
             )
             return ""
 
-    def _log_data_update(self, phase: str, data: dict[str, Any], old_data: dict[str, Any] | None) -> None:
+    def _log_data_update(
+        self, phase: str, data: dict[str, Any], old_data: dict[str, Any] | None
+    ) -> None:
         """Log data update details with consistent verbosity."""
         total = len(data) if data else 0
         phase_label = f"[bg] {phase}"
@@ -427,13 +575,15 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                     if not self._ever_connected:
                         self.logger.info("[bg] Connection attempt starting")
                     else:
-                        self.logger.warning("[bg] Reconnection attempt starting")
+                        self.logger.debug("[bg] Reconnection attempt starting")
                     # Test connection using device-specific modbus manager
                     async with self._io_lock:
                         client = await self.modbus_manager.get_client()
                         connected = client is not None
                     if not connected:
-                        self._handle_connection_failure("[bg] modbus_manager.get_client() failed")
+                        self._handle_connection_failure(
+                            "[bg] modbus_manager.get_client() failed"
+                        )
                         await asyncio.sleep(self._connection_retry_interval)
                         continue
 
@@ -443,12 +593,16 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                         await asyncio.sleep(0.7)
                         config_file = await self._get_config_file_path()
                         if not config_file:
-                            self._handle_connection_failure("[bg] Failed to determine config file path")
+                            self._handle_connection_failure(
+                                "[bg] Failed to determine config file path"
+                            )
                             await asyncio.sleep(self._connection_retry_interval)
                             continue
                         self._selected_config_file = config_file
                         # Load config file (no extra TCP used)
-                        cfg = await self.device_config.load_device_config_by_file_async(config_file)
+                        cfg = await self.device_config.load_device_config_by_file_async(
+                            config_file
+                        )
                         if cfg and isinstance(cfg, dict):
                             # Store full config (including product_info)
                             self._full_config_cache = cfg
@@ -459,16 +613,25 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                                 self._batch_ranges_cache = batch_ranges
                                 self._config_cache_valid = True
                             else:
-                                self._handle_connection_failure("[bg] parsed config has no data_points")
+                                self._handle_connection_failure(
+                                    "[bg] parsed config has no data_points"
+                                )
                                 await asyncio.sleep(self._connection_retry_interval)
                                 continue
                         else:
-                            self._handle_connection_failure("[bg] load device config file failed")
+                            self._handle_connection_failure(
+                                "[bg] load device config file failed"
+                            )
                             await asyncio.sleep(self._connection_retry_interval)
                             continue
 
                     # Try one data fetch to validate using the device-specific connection
-                    self.logger.debug("[bg] Attempting initial data fetch with %d data points", len(self._device_config_cache) if self._device_config_cache else 0)
+                    self.logger.debug(
+                        "[bg] Attempting initial data fetch with %d data points",
+                        len(self._device_config_cache)
+                        if self._device_config_cache
+                        else 0,
+                    )
                     async with self._io_lock:
                         data = await self.modbus_manager.get_all_data(
                             self._device_config_cache,
@@ -477,8 +640,12 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                         )
                     if not data:
                         # Treat as failure
-                        self.logger.warning("[bg] initial data fetch returned empty data")
-                        self._handle_connection_failure("[bg] initial data fetch returned empty")
+                        self.logger.warning(
+                            "[bg] initial data fetch returned empty data"
+                        )
+                        self._handle_connection_failure(
+                            "[bg] initial data fetch returned empty"
+                        )
                         await asyncio.sleep(self._connection_retry_interval)
                         continue
 
@@ -490,6 +657,10 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                     # This ensures sensor entities also display friendly product names
                     self._override_model_with_product_name(data)
 
+                    # Auto-set operating mode on first connect (if configured)
+                    if not self._ever_connected:
+                        await self._auto_set_mode_on_connect(data)
+
                     # Log data comparison for debugging
                     old_data = self._latest_data.copy() if self._latest_data else None
                     self._latest_data = data
@@ -497,53 +668,78 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
                     # Publish data to Home Assistant (data already has overridden model name)
                     self.async_set_updated_data(data)
-                    self.logger.debug("[bg] Data published to Home Assistant via async_set_updated_data")
+                    self.logger.debug(
+                        "[bg] Data published to Home Assistant via async_set_updated_data"
+                    )
 
                     # Reset consecutive failures on successful reconnection
                     self._consecutive_failures = 0
 
                     # Update device registry (async, non-blocking)
                     try:
-                        if self.device_info.get("model") and self.device_info.get("model") != "--":
+                        if (
+                            self.device_info.get("model")
+                            and self.device_info.get("model") != "--"
+                        ):
                             dev_reg = dr.async_get(self.hass)
-                            device = dev_reg.async_get_device(identifiers={(DOMAIN, self.entry.entry_id)})
+                            device = dev_reg.async_get_device(
+                                identifiers={(DOMAIN, self.entry.entry_id)}
+                            )
                             if device:
                                 dev_reg.async_update_device(
                                     device_id=device.id,
-                                    manufacturer=self.device_info.get("manufacturer", "Anker"),
+                                    manufacturer=self.device_info.get(
+                                        "manufacturer", "Anker"
+                                    ),
                                     model=self.device_info.get("model"),
+                                    name=self.device_info.get("name"),
                                 )
                                 self.logger.info(
                                     "Device registry updated with model: %s",
-                                    self.device_info.get("model")
+                                    self.device_info.get("model"),
                                 )
                     except Exception as e:
                         self.logger.debug("Failed to update device registry: %s", e)
                     if not self._ever_connected:
                         self._ever_connected = True
-                        self.logger.info("[bg] Connection successful, data fetched and published")
+                        self.logger.info(
+                            "[bg] Connection successful, data fetched and published"
+                        )
                     else:
-                        self.logger.info("[bg] Reconnection successful, data fetched and published")
+                        self.logger.info(
+                            "[bg] Reconnection successful, data fetched and published"
+                        )
 
                 # If connected, poll at scan interval
-                self.logger.debug("[bg] Sleeping for %d seconds before next read", self.scan_interval)
+                self.logger.debug(
+                    "[bg] Sleeping for %d seconds before next read", self.scan_interval
+                )
                 await asyncio.sleep(self.scan_interval)
                 self.logger.debug("[bg] Sleep completed, checking if should read data")
 
                 # Periodic read
-                self.logger.debug("[bg] Status check: connected=%s, config_valid=%s",
-                                self._status == "connected", self._is_config_cache_valid())
+                self.logger.debug(
+                    "[bg] Status check: connected=%s, config_valid=%s",
+                    self._status == "connected",
+                    self._is_config_cache_valid(),
+                )
 
                 if self._status == "connected":
                     if not self._is_config_cache_valid():
-                        self.logger.info("[bg] Config cache expired, reloading configuration")
+                        self.logger.info(
+                            "[bg] Config cache expired, reloading configuration"
+                        )
                         # Reload configuration
                         config_file = await self._get_config_file_path()
                         if not config_file:
-                            self._handle_connection_failure("[bg] Failed to determine config file path during reload")
+                            self._handle_connection_failure(
+                                "[bg] Failed to determine config file path during reload"
+                            )
                             await asyncio.sleep(self._connection_retry_interval)
                             continue
-                        cfg = await self.device_config.load_device_config_by_file_async(config_file)
+                        cfg = await self.device_config.load_device_config_by_file_async(
+                            config_file
+                        )
                         if cfg and isinstance(cfg, dict):
                             # Store full config (including product_info)
                             self._full_config_cache = cfg
@@ -553,16 +749,23 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                                 self._device_config_cache = data_points
                                 self._batch_ranges_cache = batch_ranges
                                 self._config_cache_valid = True
-                                self.logger.info("[bg] Configuration reloaded successfully, %d data points", len(data_points))
+                                self.logger.info(
+                                    "[bg] Configuration reloaded successfully, %d data points",
+                                    len(data_points),
+                                )
                             else:
-                                self.logger.error("[bg] Failed to reload configuration - no data points")
+                                self.logger.error(
+                                    "[bg] Failed to reload configuration - no data points"
+                                )
                                 await asyncio.sleep(self._connection_retry_interval)
                                 continue
                         else:
-                            self.logger.error("[bg] Failed to reload configuration - invalid config file")
+                            self.logger.error(
+                                "[bg] Failed to reload configuration - invalid config file"
+                            )
                             await asyncio.sleep(self._connection_retry_interval)
                             continue
-                    
+
                     if self._is_config_cache_valid():
                         self.logger.debug("[bg] Starting periodic data read")
                         async with self._io_lock:
@@ -576,26 +779,35 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                             self._override_model_with_product_name(data)
 
                             # Log data comparison for periodic reads
-                            old_data = self._latest_data.copy() if self._latest_data else None
+                            old_data = (
+                                self._latest_data.copy() if self._latest_data else None
+                            )
                             self._latest_data = data
                             self._log_data_update("periodic", data, old_data)
 
                             self.async_set_updated_data(data)
-                            self.logger.debug("[bg] Periodic data published to Home Assistant")
-                            
+                            self.logger.debug(
+                                "[bg] Periodic data published to Home Assistant"
+                            )
+
                             # Reset failure count on successful read
                             if self._consecutive_failures > 0:
                                 self._consecutive_failures = 0
-                            
-                            self.logger.debug("[bg] Periodic read completed successfully, continuing loop")
+
+                            self.logger.debug(
+                                "[bg] Periodic read completed successfully, continuing loop"
+                            )
                         else:
-                            # Increment failure count but don't immediately disconnect
-                            self._consecutive_failures += 1
-                            self.logger.warning("[bg] periodic data fetch failed (attempt %d)", self._consecutive_failures)
-                            # Only disconnect after multiple consecutive failures
-                            if self._consecutive_failures >= 3:
-                                self._handle_connection_failure("[bg] periodic data fetch failed after multiple attempts")
-                                self._status = "disconnected"
+                            self.logger.debug(
+                                "[bg] periodic data fetch failed (attempt %d)",
+                                self._consecutive_failures + 1,
+                            )
+                            if self._consecutive_failures >= 2:
+                                self._handle_connection_failure(
+                                    "[bg] periodic data fetch failed after multiple attempts"
+                                )
+                            else:
+                                self._consecutive_failures += 1
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -605,9 +817,17 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
     def _handle_connection_success(self):
         """Handle connection success."""
         if self._connection_failed:
-            self.logger.info("Connection restored - transitioning from failed to connected state")
+            # HA best practice: log once when device comes back online
+            self.logger.info(
+                "Device %s is back online (was unavailable for %d retries)",
+                self.ip_address,
+                self._consecutive_failures,
+            )
             self._connection_failed = False
             self._consecutive_failures = 0
+            self._device_unavailable_logged = False  # Reset for next unavailability
+            # Reset retry interval to fast recovery
+            self._connection_retry_interval = CONNECTION_RETRY_DELAY
             # Reset connection attempt time to allow immediate retry if needed
             self._last_connection_attempt = 0
         else:
@@ -671,7 +891,10 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Return latest known data; background loop manages IO and reconnection."""
-        self.logger.debug("_async_update_data called, returning %d data points", len(self._latest_data) if self._latest_data else 0)
+        self.logger.debug(
+            "_async_update_data called, returning %d data points",
+            len(self._latest_data) if self._latest_data else 0,
+        )
         return self._latest_data
 
     async def async_shutdown(self):
