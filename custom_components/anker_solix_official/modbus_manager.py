@@ -8,6 +8,7 @@ from typing import Optional
 from .modbus_client import AnkerSolixModbusClient
 from .connection_state import ConnectionState, ConnectionStateMachine
 from .const import CONNECTION_CHECK_INTERVAL, DEFAULT_TIMEOUT
+from .device_logger import WriteResult
 
 
 class ModbusConnectionManager:
@@ -18,9 +19,12 @@ class ModbusConnectionManager:
         self._client: Optional[AnkerSolixModbusClient] = None
         self._ip_address: Optional[str] = None
         self._port: int = 502
+        self._device_name: Optional[str] = None
         self._logger = logging.getLogger(__name__)
         self._connection_lock: Optional[asyncio.Lock] = None
-        self._operation_lock: Optional[asyncio.Lock] = None  # Lock for read/write operations
+        self._operation_lock: Optional[asyncio.Lock] = (
+            None  # Lock for read/write operations
+        )
         self._last_activity = 0
         self._connection_timeout = 300  # Close connection after 5 minutes of inactivity
         self._cleanup_task: Optional[asyncio.Task] = None
@@ -28,20 +32,32 @@ class ModbusConnectionManager:
 
         # Use connection state machine for better state management
         self._state_machine = ConnectionStateMachine()
-        
-    def initialize(self, ip_address: str, port: int = 502) -> None:
+
+    def initialize(
+        self, ip_address: str, port: int = 502, device_name: str | None = None
+    ) -> None:
         """Initialize connection parameters"""
         self._ip_address = ip_address
         self._port = port
+        self._device_name = device_name or f"{ip_address}:{port}"
         self._connection_lock = asyncio.Lock()
-        self._operation_lock = asyncio.Lock()  # Lock for serializing read/write operations
+        self._operation_lock = (
+            asyncio.Lock()
+        )  # Lock for serializing read/write operations
         self._is_initialized = True
-        self._logger.info("Modbus connection manager initialized: %s:%d", ip_address, port)
-        
+        self._logger.info(
+            "Modbus connection manager initialized: %s (%s:%d)",
+            self._device_name,
+            ip_address,
+            port,
+        )
+
     async def get_client(self) -> Optional[AnkerSolixModbusClient]:
         """Get Modbus client connection"""
         if not self._is_initialized or not self._connection_lock:
-            self._logger.error("Connection manager not initialized, please call initialize() first")
+            self._logger.error(
+                "Connection manager not initialized, please call initialize() first"
+            )
             return None
 
         async with self._connection_lock:
@@ -57,7 +73,7 @@ class ModbusConnectionManager:
                 self._cleanup_task = asyncio.create_task(self._cleanup_connection())
 
             return self._client
-    
+
     async def _create_connection(self) -> None:
         """Create new Modbus connection"""
         try:
@@ -68,30 +84,47 @@ class ModbusConnectionManager:
                 self._logger.debug("Closing old connection")
                 self._client.disconnect()
 
-            self._logger.debug("Creating new Modbus connection: %s:%d", self._ip_address, self._port)
-            self._client = AnkerSolixModbusClient(self._ip_address, self._port)
+            self._logger.debug(
+                "Creating new Modbus connection: %s (%s:%d)",
+                self._device_name,
+                self._ip_address,
+                self._port,
+            )
+            self._client = AnkerSolixModbusClient(
+                self._ip_address, self._port, self._device_name
+            )
 
             # Connect synchronously in async environment
             loop = asyncio.get_event_loop()
             success = await loop.run_in_executor(None, self._client.connect)
 
             if success:
-                self._logger.info("Modbus connection created successfully: %s:%d", self._ip_address, self._port)
+                self._logger.info(
+                    "Modbus connection created successfully: %s:%d",
+                    self._ip_address,
+                    self._port,
+                )
                 self._last_activity = time.time()
                 # Transition to CONNECTED state
                 await self._state_machine.transition_to(ConnectionState.CONNECTED)
             else:
-                self._logger.error("Failed to create Modbus connection: %s:%d", self._ip_address, self._port)
+                self._logger.debug(
+                    "Failed to create Modbus connection: %s:%d",
+                    self._ip_address,
+                    self._port,
+                )
                 self._client = None
                 # Transition to ERROR state
                 await self._state_machine.transition_to(ConnectionState.ERROR)
 
         except Exception as e:
-            self._logger.error("Exception occurred while creating Modbus connection: %s", e, exc_info=True)
+            self._logger.debug(
+                "Exception occurred while creating Modbus connection: %s", e
+            )
             self._client = None
             # Transition to ERROR state
             await self._state_machine.transition_to(ConnectionState.ERROR)
-    
+
     async def _is_connected(self) -> bool:
         """Check if connection is valid"""
         if not self._client:
@@ -103,7 +136,7 @@ class ModbusConnectionManager:
         except Exception as e:
             self._logger.debug("Connection check failed: %s", e)
             return False
-    
+
     async def _cleanup_connection(self) -> None:
         """Periodically clean up connections"""
         try:
@@ -111,21 +144,31 @@ class ModbusConnectionManager:
                 await asyncio.sleep(60)  # Check every minute
 
                 if not self._connection_lock:
-                    self._logger.debug("Connection manager closed, exiting cleanup task")
+                    self._logger.debug(
+                        "Connection manager closed, exiting cleanup task"
+                    )
                     break
 
-                if (self._client and
-                    time.time() - self._last_activity > self._connection_timeout):
-
+                if (
+                    self._client
+                    and time.time() - self._last_activity > self._connection_timeout
+                ):
                     async with self._connection_lock:
-                        if (self._client and
-                            time.time() - self._last_activity > self._connection_timeout):
-
-                            self._logger.info("Connection timeout, closing Modbus connection")
+                        if (
+                            self._client
+                            and time.time() - self._last_activity
+                            > self._connection_timeout
+                        ):
+                            self._logger.info(
+                                "Connection timeout, closing Modbus connection"
+                            )
                             try:
                                 self._client.disconnect()
                             except Exception as disconnect_error:
-                                self._logger.warning("Exception occurred while closing connection: %s", disconnect_error)
+                                self._logger.warning(
+                                    "Exception occurred while closing connection: %s",
+                                    disconnect_error,
+                                )
                             finally:
                                 self._client = None
 
@@ -133,13 +176,17 @@ class ModbusConnectionManager:
             self._logger.debug("Cleanup task cancelled")
             raise
         except Exception as e:
-            self._logger.error("Exception occurred while cleaning up connection: %s", e, exc_info=True)
-    
+            self._logger.error(
+                "Exception occurred while cleaning up connection: %s", e, exc_info=True
+            )
+
     async def read_register(self, address: int, data_type: str, count: int = None):
         """Read register"""
         client = await self.get_client()
         if not client:
-            self._logger.warning("Unable to get client connection, failed to read register %d", address)
+            self._logger.warning(
+                "Unable to get client connection, failed to read register %d", address
+            )
             return 0
 
         try:
@@ -150,7 +197,9 @@ class ModbusConnectionManager:
             self._last_activity = time.time()
             return result
         except Exception as e:
-            self._logger.error("Failed to read register %d: %s", address, e, exc_info=True)
+            self._logger.error(
+                "Failed to read register %d: %s", address, e, exc_info=True
+            )
             return 0
 
     async def read_device_pn(self) -> tuple[str, str, str]:
@@ -161,7 +210,9 @@ class ModbusConnectionManager:
         """
         client = await self.get_client()
         if not client:
-            self._logger.warning("Unable to get client connection, failed to read device PN")
+            self._logger.warning(
+                "Unable to get client connection, failed to read device PN"
+            )
             return ("", "", "")
 
         try:
@@ -175,7 +226,7 @@ class ModbusConnectionManager:
 
     async def write_register(
         self, address: int, value, data_type: str, timeout: float = 15.0
-    ) -> bool:
+    ) -> WriteResult:
         """Write register with timeout control.
 
         Uses a fresh connection to avoid TCP state issues.
@@ -187,19 +238,29 @@ class ModbusConnectionManager:
             timeout: Timeout in seconds (default: 15.0, device responds quickly)
 
         Returns:
-            True if write succeeded, False otherwise
+            WriteResult with success status and error details
         """
         # Use operation lock to prevent concurrent read/write operations
         if not self._operation_lock:
             self._operation_lock = asyncio.Lock()
 
-        self._logger.info(
-            "Write register request | address=%d (0x%04X), value=%s, data_type=%s, timeout=%.1fs, waiting_for_lock=%s",
-            address, address, value, data_type, timeout, self._operation_lock.locked()
+        self._logger.warning(
+            "Write register request | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, timeout=%.1fs, waiting_for_lock=%s",
+            self._device_name,
+            self._ip_address,
+            self._port,
+            address,
+            address,
+            value,
+            data_type,
+            timeout,
+            self._operation_lock.locked(),
         )
 
         async with self._operation_lock:
-            self._logger.info("Write register acquired lock, reconnecting for clean state...")
+            self._logger.info(
+                "Write register acquired lock, reconnecting for clean state..."
+            )
 
             # Force reconnect before write to ensure clean TCP state
             # This is critical because long-lived connections may have stale data
@@ -212,15 +273,22 @@ class ModbusConnectionManager:
                 await self._create_connection()
             except Exception as e:
                 self._logger.error("Failed to reconnect before write: %s", e)
-                return False
+                return WriteResult(
+                    success=False, error_reason=f"Failed to reconnect before write: {e}"
+                )
 
             client = self._client
             if not client:
                 self._logger.warning(
                     "Unable to get client connection | write_register address=%d (0x%04X), value=%s, data_type=%s",
-                    address, address, value, data_type
+                    address,
+                    address,
+                    value,
+                    data_type,
                 )
-                return False
+                return WriteResult(
+                    success=False, error_reason="Unable to get client connection"
+                )
 
             try:
                 loop = asyncio.get_event_loop()
@@ -232,39 +300,74 @@ class ModbusConnectionManager:
                 )
                 self._last_activity = time.time()
 
-                if result:
-                    self._logger.info(
-                        "Write register completed | address=%d (0x%04X), value=%s, data_type=%s, result=SUCCESS",
-                        address, address, value, data_type
+                if result.success:
+                    self._logger.warning(
+                        "Write register completed | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, result=SUCCESS",
+                        self._device_name,
+                        self._ip_address,
+                        self._port,
+                        address,
+                        address,
+                        value,
+                        data_type,
                     )
                 else:
                     self._logger.warning(
-                        "Write register completed | address=%d (0x%04X), value=%s, data_type=%s, result=FAILED",
-                        address, address, value, data_type
+                        "Write register completed | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, result=FAILED, reason=%s",
+                        self._device_name,
+                        self._ip_address,
+                        self._port,
+                        address,
+                        address,
+                        value,
+                        data_type,
+                        result.error_reason,
                     )
                 return result
             except asyncio.TimeoutError:
                 self._logger.error(
-                    "Write register TIMEOUT | address=%d (0x%04X), value=%s, data_type=%s, timeout=%.1fs",
-                    address, address, value, data_type, timeout
+                    "Write register TIMEOUT | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, timeout=%.1fs",
+                    self._device_name,
+                    self._ip_address,
+                    self._port,
+                    address,
+                    address,
+                    value,
+                    data_type,
+                    timeout,
                 )
-                return False
+                return WriteResult(
+                    success=False, error_reason=f"Connection timeout ({timeout}s)"
+                )
             except Exception as e:
                 error_str = str(e)
-                # "No response received" - pymodbus didn't accept device response format
-                # But device actually responded (RX received), so treat as success
                 if "No response received" in error_str:
-                    self._logger.info(
-                        "Write register SUCCESS (pymodbus format issue) | address=%d (0x%04X), value=%s, data_type=%s",
-                        address, address, value, data_type
+                    self._logger.warning(
+                        "Write register SUCCESS (pymodbus format issue) | [%s] address=%d (0x%04X), value=%s, data_type=%s",
+                        self._device_name,
+                        address,
+                        address,
+                        value,
+                        data_type,
                     )
-                    return True
+                    return WriteResult(
+                        success=True,
+                        error_reason="No response received but device responded",
+                    )
                 self._logger.error(
-                    "Write register EXCEPTION | address=%d (0x%04X), value=%s, data_type=%s, error=%s",
-                    address, address, value, data_type, e, exc_info=True
+                    "Write register EXCEPTION | [%s] address=%d (0x%04X), value=%s, data_type=%s, error=%s",
+                    self._device_name,
+                    address,
+                    address,
+                    value,
+                    data_type,
+                    e,
+                    exc_info=True,
                 )
-                return False
-    
+                return WriteResult(
+                    success=False, error_reason=f"{type(e).__name__}: {error_str}"
+                )
+
     async def get_all_data(
         self,
         data_points: dict,
@@ -273,7 +376,10 @@ class ModbusConnectionManager:
         use_batch_optimization: bool = True,
     ) -> dict:
         """Batch read data"""
-        self._logger.debug("get_all_data called with %d data points", len(data_points) if data_points else 0)
+        self._logger.debug(
+            "get_all_data called with %d data points",
+            len(data_points) if data_points else 0,
+        )
         client = await self.get_client()
         if not client:
             self._logger.warning("get_all_data: no client available")
@@ -287,15 +393,22 @@ class ModbusConnectionManager:
             try:
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(
-                    None, client.get_all_data, data_points, batch_ranges, use_batch_optimization
+                    None,
+                    client.get_all_data,
+                    data_points,
+                    batch_ranges,
+                    use_batch_optimization,
                 )
                 self._last_activity = time.time()
-                self._logger.debug("get_all_data completed, got %d results", len(result) if result else 0)
+                self._logger.debug(
+                    "get_all_data completed, got %d results",
+                    len(result) if result else 0,
+                )
                 return result if result else {}
             except Exception as e:
                 self._logger.error("Failed to batch read data: %s", e, exc_info=True)
                 return {}
-    
+
     def force_disconnect(self) -> None:
         """Force disconnect without acquiring lock - for error recovery."""
         if self._client:
@@ -322,7 +435,9 @@ class ModbusConnectionManager:
                 try:
                     self._client.disconnect()
                 except Exception as e:
-                    self._logger.warning("Exception occurred while disconnecting: %s", e)
+                    self._logger.warning(
+                        "Exception occurred while disconnecting: %s", e
+                    )
                 finally:
                     self._client = None
 
@@ -334,7 +449,10 @@ class ModbusConnectionManager:
                 except asyncio.CancelledError:
                     self._logger.debug("Cleanup task cancelled")
                 except Exception as e:
-                    self._logger.warning("Exception occurred while waiting for cleanup task to finish: %s", e)
+                    self._logger.warning(
+                        "Exception occurred while waiting for cleanup task to finish: %s",
+                        e,
+                    )
                 finally:
                     self._cleanup_task = None
 
@@ -344,7 +462,7 @@ class ModbusConnectionManager:
         # Clean up state
         self._is_initialized = False
         self._connection_lock = None
-    
+
     def get_connection_info(self) -> dict:
         """Get connection information"""
         base_info = {
@@ -353,7 +471,7 @@ class ModbusConnectionManager:
             "last_activity": self._last_activity,
             "connection_timeout": self._connection_timeout,
             "is_initialized": self._is_initialized,
-            "connection_state": self._state_machine.current_state.value
+            "connection_state": self._state_machine.current_state.value,
         }
 
         if not self._client:

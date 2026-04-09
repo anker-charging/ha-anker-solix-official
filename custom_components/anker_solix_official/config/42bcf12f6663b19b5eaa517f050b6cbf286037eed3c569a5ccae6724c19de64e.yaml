@@ -1,0 +1,254 @@
+# =============================================================================
+# Anker Solix Device Configuration File
+# =============================================================================
+
+# Product information
+# default_name: Default product name (used when product code not found or SN not available)
+# product_code_mapping: Map product code to specific product name
+# sn_register_key: The data point key for reading SN (omit if SN not available)
+# model_register_key: The data point key to override with product name
+product_info:
+  default_name: "Anker SOLIX Smart Meter Gen 2"
+  sn_register_key: "meter_sn"
+  model_register_key: "meter_model"
+  product_code_mapping:
+    # Anker SOLIX Smart Meter Gen 2
+    "DNSL": "Anker SOLIX Smart Meter Gen 2"
+    "DNSM": "Anker SOLIX Smart Meter Gen 2"
+
+batch_read_ranges:
+  - 10620-10646
+  - 10666-10677
+  - 10696-10712
+
+# =======================================================================
+# Read Quantities Configuration (Sensor Type)
+# =======================================================================
+read_quantities:
+  # =======================================================================
+  # Device Information
+  # =======================================================================
+  meter_model:
+    translation_key: "meter_model"
+    address: 10620
+    data_type: "STRING"
+    unit: "/"
+    gain: 1
+    count: 10
+    icon: "mdi:meter-electric"
+
+  meter_type:
+    translation_key: "meter_type"
+    address: 10630
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    icon: "mdi:meter-electric-outline"
+    value_mapping:
+      1: "single_phase"
+      2: "three_phase"
+
+  meter_sn:
+    translation_key: "meter_sn"
+    address: 10702
+    data_type: "STRING"
+    unit: "/"
+    gain: 1
+    count: 10
+    icon: "mdi:identifier"
+
+  meter_sw_version:
+    translation_key: "meter_sw_version"
+    address: 10696
+    data_type: "VERSION"
+    unit: "/"
+    gain: 1
+    count: 2
+    icon: "mdi:information-outline"
+
+  # =======================================================================
+  # Primary CT Data (CT Group 1)
+  # =======================================================================
+  primary_total_active_power:
+    translation_key: "primary_total_active_power"
+    address: 10644
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:flash"
+
+  primary_phase_1_active_power:
+    translation_key: "primary_phase_1_active_power"
+    address: 10638
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:flash"
+
+  primary_phase_1_current:
+    translation_key: "primary_phase_1_current"
+    address: 10635
+    data_type: "INT16"
+    unit: "A"
+    gain: 100
+    count: 1
+    icon: "mdi:current-ac"
+
+  primary_phase_1_voltage:
+    translation_key: "primary_phase_1_voltage"
+    address: 10632
+    data_type: "UINT16"
+    unit: "V"
+    gain: 10
+    count: 1
+    icon: "mdi:flash"
+
+  primary_phase_2_active_power:
+    translation_key: "primary_phase_2_active_power"
+    address: 10640
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:flash"
+
+  primary_phase_2_current:
+    translation_key: "primary_phase_2_current"
+    address: 10636
+    data_type: "INT16"
+    unit: "A"
+    gain: 100
+    count: 1
+    icon: "mdi:current-ac"
+
+  primary_phase_2_voltage:
+    translation_key: "primary_phase_2_voltage"
+    address: 10633
+    data_type: "UINT16"
+    unit: "V"
+    gain: 10
+    count: 1
+    icon: "mdi:flash"
+
+  primary_phase_3_active_power:
+    translation_key: "primary_phase_3_active_power"
+    address: 10642
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:flash"
+
+  primary_phase_3_current:
+    translation_key: "primary_phase_3_current"
+    address: 10637
+    data_type: "INT16"
+    unit: "A"
+    gain: 100
+    count: 1
+    icon: "mdi:current-ac"
+
+  primary_phase_3_voltage:
+    translation_key: "primary_phase_3_voltage"
+    address: 10634
+    data_type: "UINT16"
+    unit: "V"
+    gain: 10
+    count: 1
+    icon: "mdi:flash"
+
+  # =======================================================================
+  # Secondary CT Data (CT Group 2)
+  # =======================================================================
+  secondary_total_active_power:
+    translation_key: "secondary_total_active_power"
+    address: 10675
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:flash"
+
+  secondary_phase_1_active_power:
+    translation_key: "secondary_phase_1_active_power"
+    address: 10669
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:flash"
+
+  secondary_phase_1_current:
+    translation_key: "secondary_phase_1_current"
+    address: 10666
+    data_type: "INT16"
+    unit: "A"
+    gain: 100
+    count: 1
+    icon: "mdi:current-ac"
+
+  secondary_phase_1_voltage:
+    translation_key: "secondary_phase_1_voltage"
+    address: 10632
+    data_type: "UINT16"
+    unit: "V"
+    gain: 10
+    count: 1
+    icon: "mdi:flash"
+
+  secondary_phase_2_active_power:
+    translation_key: "secondary_phase_2_active_power"
+    address: 10671
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:flash"
+
+  secondary_phase_2_current:
+    translation_key: "secondary_phase_2_current"
+    address: 10667
+    data_type: "INT16"
+    unit: "A"
+    gain: 100
+    count: 1
+    icon: "mdi:current-ac"
+
+  secondary_phase_2_voltage:
+    translation_key: "secondary_phase_2_voltage"
+    address: 10633
+    data_type: "UINT16"
+    unit: "V"
+    gain: 10
+    count: 1
+    icon: "mdi:flash"
+
+  secondary_phase_3_active_power:
+    translation_key: "secondary_phase_3_active_power"
+    address: 10673
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:flash"
+
+  secondary_phase_3_current:
+    translation_key: "secondary_phase_3_current"
+    address: 10668
+    data_type: "INT16"
+    unit: "A"
+    gain: 100
+    count: 1
+    icon: "mdi:current-ac"
+
+  secondary_phase_3_voltage:
+    translation_key: "secondary_phase_3_voltage"
+    address: 10634
+    data_type: "UINT16"
+    unit: "V"
+    gain: 10
+    count: 1
+    icon: "mdi:flash"

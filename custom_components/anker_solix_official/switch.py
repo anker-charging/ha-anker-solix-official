@@ -104,23 +104,26 @@ class AnkerSolixSwitch(AnkerSolixBaseEntity, SwitchEntity):
         Also checks write protection for both the switch entity and the read entity.
         """
         # Check write protection for this switch entity first
-        is_protected, protected_value = self.coordinator.get_protected_value(self._entity_key)
+        is_protected, protected_value = self.coordinator.get_protected_value(
+            self._entity_key
+        )
         if is_protected:
             _LOGGER.debug(
-                "Switch %s using protected value: %s",
-                self._entity_key, protected_value
+                "Switch %s using protected value: %s", self._entity_key, protected_value
             )
             return protected_value
 
         # If using separate read entity, also check its protection
         if self._read_entity_key is not None:
-            is_read_protected, read_protected_value = self.coordinator.get_protected_value(
-                self._read_entity_key
+            is_read_protected, read_protected_value = (
+                self.coordinator.get_protected_value(self._read_entity_key)
             )
             if is_read_protected:
                 _LOGGER.debug(
                     "Switch %s using protected value from %s: %s",
-                    self._entity_key, self._read_entity_key, read_protected_value
+                    self._entity_key,
+                    self._read_entity_key,
+                    read_protected_value,
                 )
                 return read_protected_value
 
@@ -145,9 +148,7 @@ class AnkerSolixSwitch(AnkerSolixBaseEntity, SwitchEntity):
         try:
             return int(raw_value) == on_value
         except (ValueError, TypeError):
-            _LOGGER.warning(
-                "Invalid raw value for %s: %s", self._entity_key, raw_value
-            )
+            _LOGGER.warning("Invalid raw value for %s: %s", self._entity_key, raw_value)
             return None
 
     async def async_turn_on(self, **_kwargs: Any) -> None:
@@ -175,52 +176,83 @@ class AnkerSolixSwitch(AnkerSolixBaseEntity, SwitchEntity):
         try:
             address = int(address)
         except (ValueError, TypeError):
-            _LOGGER.error("Invalid address type for switch %s: %s", self._entity_key, address)
+            _LOGGER.error(
+                "Invalid address type for switch %s: %s", self._entity_key, address
+            )
             return
 
         data_type = self._config.get("data_type", "UINT16")
 
-        _LOGGER.info(
+        dlog = self.coordinator.device_logger
+
+        dlog.warning(
             "Writing switch %s | address=%d (0x%04X), state='%s', value=%d, data_type=%s",
-            self._entity_key, address, address, state_name, value, data_type
+            self._entity_key,
+            address,
+            address,
+            state_name,
+            value,
+            data_type,
         )
 
         try:
-            success = await self.coordinator.modbus_manager.write_register(
+            result = await self.coordinator.modbus_manager.write_register(
                 address, value, data_type
             )
-            if success:
-                # Enable write protection to prevent UI "flash back"
-                # Device may take several seconds to process the command
-                # Protect the value we just wrote (on_value or off_value)
+            if result.success:
                 self.coordinator.set_write_protection(self._entity_key, value, 10.0)
 
-                # Also protect the read entity if using separate read/write addresses
                 if self._read_entity_key:
-                    self.coordinator.set_write_protection(self._read_entity_key, value, 10.0)
+                    self.coordinator.set_write_protection(
+                        self._read_entity_key, value, 10.0
+                    )
                     _LOGGER.debug(
                         "Write protection set for both %s and %s, value=%d, duration=10s",
-                        self._entity_key, self._read_entity_key, value
+                        self._entity_key,
+                        self._read_entity_key,
+                        value,
                     )
 
-                # Update state immediately - HA will auto-log to logbook
                 self.async_write_ha_state()
 
                 device_name = self.coordinator.device_name or "Anker Solix"
                 entity_name = self.name or self._entity_key
                 state_display = "ON" if state_name == "on" else "OFF"
+                log_message = f"{entity_name} → {state_display}"
 
-                _LOGGER.warning(
-                    "📝 %s %s → %s",
-                    device_name, entity_name, state_display
+                await self.coordinator.hass.services.async_call(
+                    "logbook",
+                    "log",
+                    {
+                        "name": device_name,
+                        "message": log_message,
+                        "entity_id": self.entity_id,
+                        "domain": DOMAIN,
+                    },
+                    blocking=False,
                 )
+
+                dlog.warning("📝 %s %s → %s", device_name, entity_name, state_display)
             else:
-                _LOGGER.error(
-                    "Write switch FAILED | %s: state='%s', value=%d, address=%d (0x%04X), result=False",
-                    self._entity_key, state_name, value, address, address
+                dlog.error(
+                    "Write switch FAILED | entity=%s, state='%s', value=%d, address=%d (0x%04X), "
+                    "reason=%s, raw_response=%s, tx_frame=%s",
+                    self._entity_key,
+                    state_name,
+                    value,
+                    address,
+                    address,
+                    result.error_reason,
+                    result.raw_response or "N/A",
+                    result.tx_frame or "N/A",
                 )
         except Exception as e:
-            _LOGGER.error(
+            dlog.error(
                 "Write switch EXCEPTION | %s: state='%s', value=%d, address=%d (0x%04X), error=%s",
-                self._entity_key, state_name, value, address, address, e
+                self._entity_key,
+                state_name,
+                value,
+                address,
+                address,
+                e,
             )

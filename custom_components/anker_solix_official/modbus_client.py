@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .batch_reader import BatchRegisterReader
+from .device_logger import WriteResult
 
 try:
     from pymodbus.client import ModbusTcpClient
@@ -38,7 +39,12 @@ except ImportError:
 class AnkerSolixModbusClient:
     """Anker Solix TCP client class."""
 
-    def __init__(self, ip_address: str = "127.0.0.1", port: int = 502):
+    def __init__(
+        self,
+        ip_address: str = "127.0.0.1",
+        port: int = 502,
+        device_name: str | None = None,
+    ):
         """Initialize Modbus TCP client."""
         if ModbusTcpClient is None:
             raise ImportError(
@@ -47,9 +53,14 @@ class AnkerSolixModbusClient:
 
         self.ip_address = ip_address
         self.port = port
+        self.device_name = device_name or f"{ip_address}:{port}"
         self.client = self._create_client(ip_address, port)
         self._logger = logging.getLogger(__name__)
-        self._logger.info("Using pymodbus version: %s", PYMODBUS_VERSION)
+        self._logger.info(
+            "Using pymodbus version: %s for device %s",
+            PYMODBUS_VERSION,
+            self.device_name,
+        )
 
         # Configure pymodbus logging to reduce duplicate logs
         pymodbus_logger = logging.getLogger("pymodbus")
@@ -226,7 +237,7 @@ class AnkerSolixModbusClient:
 
     def _default_value(self, data_type: str) -> Any:
         """Return default fallback value for a data type."""
-        return "" if data_type == "STRING" else 0
+        return "" if data_type in ("STRING", "VERSION") else 0
 
     def _decode_register_value(
         self, address: int, data_type: str, registers: list[int]
@@ -267,6 +278,27 @@ class AnkerSolixModbusClient:
                 high = registers[0] & 0xFFFF
                 low = registers[1] & 0xFFFF
                 value = (high << 16) | low
+            elif data_type == "VERSION":
+                # VERSION format: 4 bytes representing version segments
+                # e.g., [0x00, 0x00, 0x01, 0x00] -> "0.0.1.0"
+                version_bytes = []
+                for reg in registers[:2]:  # Only use first 2 registers (4 bytes)
+                    version_bytes.append((reg >> 8) & 0xFF)
+                    version_bytes.append(reg & 0xFF)
+
+                self._logger.debug(
+                    "Version bytes for address %d: %s", address, version_bytes
+                )
+
+                # Format as version string: "X.X.X.X"
+                if len(version_bytes) >= 4:
+                    value = f"{version_bytes[0]}.{version_bytes[1]}.{version_bytes[2]}.{version_bytes[3]}"
+                else:
+                    value = ""
+
+                self._logger.debug(
+                    "Decoded version at address %d: '%s'", address, value
+                )
             elif data_type == "STRING":
                 string_bytes = []
                 for reg in registers:
@@ -317,7 +349,7 @@ class AnkerSolixModbusClient:
                 1
                 if data_type == "UINT16"
                 else 2
-                if data_type in ["INT32", "UINT32"]
+                if data_type in ("INT32", "UINT32", "VERSION")
                 else 10
                 if data_type == "STRING"
                 else 1
@@ -459,24 +491,32 @@ class AnkerSolixModbusClient:
                 4: "Slave Device Failure",
             }
             exc_name = exc_names.get(exc_code, "Unknown")
+            raw_bytes = ""
+            if hasattr(result, "encode"):
+                try:
+                    encoded = result.encode()
+                    raw_bytes = " ".join(f"{b:02X}" for b in encoded)
+                except Exception:
+                    raw_bytes = str(result)
             self._logger.error(
-                "RX Exception | FC=0x%02X, exc_code=%s(%s), result=%s",
+                "RX Exception | FC=0x%02X, exc_code=%s(%s), raw_response=[%s], result=%s",
                 func_code | 0x80,
                 exc_code,
                 exc_name,
+                raw_bytes,
                 result,
             )
         else:
             # Normal response
             if func_code == 0x06:
-                self._logger.info(
+                self._logger.warning(
                     "RX OK | [FC=0x%02X(WriteSingleReg)] addr=%d(0x%04X) write success",
                     func_code,
                     address,
                     address,
                 )
             elif func_code == 0x10:
-                self._logger.info(
+                self._logger.warning(
                     "RX OK | [FC=0x%02X(WriteMultiReg)] addr=%d(0x%04X), count=%d write success",
                     func_code,
                     address,
@@ -484,7 +524,7 @@ class AnkerSolixModbusClient:
                     len(values),
                 )
 
-    def write_register(self, address: int, value: Any, data_type: str) -> bool:
+    def write_register(self, address: int, value: Any, data_type: str) -> WriteResult:
         """Write register (function code 06 / 16)."""
         # Check connection status with detailed logging
         is_connected = self._ensure_connection()
@@ -497,7 +537,7 @@ class AnkerSolixModbusClient:
         except Exception:
             pass
 
-        self._logger.info(
+        self._logger.warning(
             "Write register PRE-CHECK | address=%d (0x%04X), value=%s, data_type=%s, is_connected=%s, socket_open=%s",
             address,
             address,
@@ -508,14 +548,22 @@ class AnkerSolixModbusClient:
         )
 
         if not is_connected:
+            reason = f"Device not connected (is_connected={is_connected}, socket_open={socket_open})"
             self._logger.warning(
-                "Unable to write register - not connected | address=%d (0x%04X), value=%s, data_type=%s",
+                "Unable to write register - not connected | "
+                "[%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, "
+                "is_connected=%s, socket_open=%s",
+                self.device_name,
+                self.ip_address,
+                self.port,
                 address,
                 address,
                 value,
                 data_type,
+                is_connected,
+                socket_open,
             )
-            return False
+            return WriteResult(success=False, error_reason=reason)
 
         try:
             # Prepare raw register values for logging
@@ -526,7 +574,7 @@ class AnkerSolixModbusClient:
                 raw_registers = [int(value) & 0xFFFF]
                 func_code = 0x06
                 tx_frame = self._format_modbus_frame(func_code, address, raw_registers)
-                self._logger.info("TX | %s", tx_frame)
+                self._logger.warning("TX | %s", tx_frame)
                 result = self.client.write_register(address=address, value=int(value))
             elif data_type == "INT32":
                 int_value = int(value)
@@ -536,7 +584,7 @@ class AnkerSolixModbusClient:
                 raw_registers = [high, low]
                 func_code = 0x10
                 tx_frame = self._format_modbus_frame(func_code, address, raw_registers)
-                self._logger.info(
+                self._logger.warning(
                     "TX | %s (raw=%s, big-endian: high=0x%04X, low=0x%04X)",
                     tx_frame,
                     value,
@@ -552,7 +600,7 @@ class AnkerSolixModbusClient:
                 raw_registers = [high, low]
                 func_code = 0x10
                 tx_frame = self._format_modbus_frame(func_code, address, raw_registers)
-                self._logger.info(
+                self._logger.warning(
                     "TX | %s (raw=%s, big-endian: high=0x%04X, low=0x%04X)",
                     tx_frame,
                     value,
@@ -566,7 +614,7 @@ class AnkerSolixModbusClient:
                 raw_registers = [int(value) & 0xFFFF]
                 func_code = 0x06
                 tx_frame = self._format_modbus_frame(func_code, address, raw_registers)
-                self._logger.info("TX | %s", tx_frame)
+                self._logger.warning("TX | %s", tx_frame)
                 result = self.client.write_register(address=address, value=int(value))
 
             # Format raw registers for error logging
@@ -576,8 +624,30 @@ class AnkerSolixModbusClient:
             self._log_write_response(result, func_code, address, raw_registers)
 
             if result.isError():
+                exc_code = getattr(result, "exception_code", None)
+                exc_names = {
+                    1: "Illegal Function",
+                    2: "Illegal Data Address",
+                    3: "Illegal Data Value",
+                    4: "Slave Device Failure",
+                }
+                exc_name = exc_names.get(exc_code, "Unknown") if exc_code else ""
+                raw_bytes = ""
+                if hasattr(result, "encode"):
+                    try:
+                        encoded = result.encode()
+                        raw_bytes = " ".join(f"{b:02X}" for b in encoded)
+                    except Exception:
+                        raw_bytes = str(result)
+                if exc_code:
+                    reason = f"Modbus exception: {exc_name} (code={exc_code})"
+                else:
+                    reason = f"Modbus error: {result}"
                 self._logger.error(
-                    "Write register FAILED | address=%d (0x%04X), value=%s, data_type=%s, raw_registers=[%s], error=%s",
+                    "Write register FAILED | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, raw_registers=[%s], error=%s",
+                    self.device_name,
+                    self.ip_address,
+                    self.port,
                     address,
                     address,
                     value,
@@ -585,9 +655,16 @@ class AnkerSolixModbusClient:
                     raw_hex,
                     result,
                 )
-                return False
+                return WriteResult(
+                    success=False,
+                    error_reason=reason,
+                    raw_response=raw_bytes,
+                    exception_code=exc_code,
+                    exception_name=exc_name,
+                    tx_frame=tx_frame,
+                )
 
-            self._logger.info(
+            self._logger.warning(
                 "Write register SUCCESS | address=%d (0x%04X), value=%s, data_type=%s, raw_registers=[%s]",
                 address,
                 address,
@@ -595,13 +672,16 @@ class AnkerSolixModbusClient:
                 data_type,
                 raw_hex,
             )
-            return True
+            return WriteResult(success=True, tx_frame=tx_frame)
         except Exception as e:
             # Catch ALL exceptions and check for "No response received"
             error_str = str(e)
             exception_type = type(e).__name__
             self._logger.warning(
-                "Write register caught exception | type=%s, address=%d, value=%s, error=%s",
+                "Write register caught exception | [%s] device=%s:%d, type=%s, address=%d, value=%s, error=%s",
+                self.device_name,
+                self.ip_address,
+                self.port,
                 exception_type,
                 address,
                 value,
@@ -615,7 +695,10 @@ class AnkerSolixModbusClient:
                     value,
                     data_type,
                 )
-                return True
+                return WriteResult(
+                    success=True,
+                    error_reason="No response received but device responded",
+                )
             self._logger.error(
                 "Write register EXCEPTION | address=%d (0x%04X), value=%s, data_type=%s, error=%s",
                 address,
@@ -625,7 +708,9 @@ class AnkerSolixModbusClient:
                 e,
             )
             self._handle_connection_error(error_str)
-            return False
+            return WriteResult(
+                success=False, error_reason=f"{exception_type}: {error_str}"
+            )
 
     def get_connection_info(self) -> dict[str, Any]:
         """Get connection information."""

@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.number import NumberEntity
+from homeassistant.components.number import NumberEntity, NumberMode
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -82,8 +83,15 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
         # Set value range
         self._attr_native_min_value = config.get("min_value", 0)
-        self._attr_native_max_value = config.get("max_value", 100)
+        self._config_max_value = config.get("max_value", 100)
         self._attr_native_step = config.get("step", 1)
+
+        # Dynamic max power entity keys (for direction-dependent upper limit)
+        self._max_charge_power_entity = config.get("max_charge_power_entity")
+        self._max_discharge_power_entity = config.get("max_discharge_power_entity")
+
+        # Force BOX mode to prevent HA from auto-switching to slider
+        self._attr_mode = NumberMode.BOX
 
         # Set unit
         unit = config.get("unit")
@@ -104,13 +112,14 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
         self._initial_value: float | int | None = None
 
         _LOGGER.info(
-            "Number entity initialized | key=%s, address=%s, min=%s, max=%s, step=%s, unit=%s",
+            "Number entity initialized | key=%s, address=%s, min=%s, max=%s, step=%s, unit=%s, dynamic_max=%s",
             key,
             config.get("address"),
             self._attr_native_min_value,
-            self._attr_native_max_value,
+            self._config_max_value,
             self._attr_native_step,
             self._attr_native_unit_of_measurement,
+            bool(self._max_charge_power_entity or self._max_discharge_power_entity),
         )
 
     async def async_added_to_hass(self) -> None:
@@ -139,14 +148,42 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
             self.async_write_ha_state()
 
     @property
-    def available(self) -> bool:
-        """Return if entity is available.
+    def native_max_value(self) -> float:
+        """Return dynamic max value based on current charge/discharge direction."""
+        if not self._max_charge_power_entity and not self._max_discharge_power_entity:
+            return self._config_max_value
 
-        Checks visibility condition: if visibility_entity is configured,
-        this entity is only available when:
-        - visibility_bit is set: check if that bit is set in visibility_entity value
-        - visibility_value is set: check if visibility_entity equals visibility_value
-        """
+        direction_entity = self._config.get("direction_entity")
+        if not direction_entity:
+            return self._config_max_value
+
+        direction = self.coordinator.get_user_selection(direction_entity)
+        data = self.coordinator.data
+
+        if direction == "charge" and self._max_charge_power_entity and data:
+            raw = data.get(self._max_charge_power_entity)
+            if raw is not None:
+                try:
+                    val = abs(int(raw))
+                    if val > 0:
+                        return max(val, self._attr_native_min_value)
+                except (ValueError, TypeError):
+                    pass
+        elif direction == "discharge" and self._max_discharge_power_entity and data:
+            raw = data.get(self._max_discharge_power_entity)
+            if raw is not None:
+                try:
+                    val = abs(int(raw))
+                    if val > 0:
+                        return max(val, self._attr_native_min_value)
+                except (ValueError, TypeError):
+                    pass
+
+        return self._config_max_value
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
         # First check base availability (coordinator connected)
         if not self.coordinator.is_connected():
             return False
@@ -319,23 +356,78 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
         data_type = self._config.get("data_type", "UINT16")
 
-        # Apply gain for write operation (reverse of read)
+        direction_entity = self._config.get("direction_entity")
+        if direction_entity and (
+            self._max_charge_power_entity or self._max_discharge_power_entity
+        ):
+            direction = self.coordinator.get_user_selection(direction_entity)
+            data = self.coordinator.data
+            _LOGGER.warning(
+                "Power capacity check | entity=%s, value=%s, direction=%s, "
+                "has_data=%s, max_charge_entity=%s, max_discharge_entity=%s",
+                self._entity_key,
+                value,
+                direction,
+                data is not None and bool(data),
+                self._max_charge_power_entity,
+                self._max_discharge_power_entity,
+            )
+            if direction and data:
+                if direction == "charge" and self._max_charge_power_entity:
+                    raw = data.get(self._max_charge_power_entity)
+                    device_max = abs(int(raw)) if raw is not None else None
+                    _LOGGER.warning(
+                        "Charge capacity check | raw=%s, device_max=%s, min_value=%s, will_reject=%s",
+                        raw,
+                        device_max,
+                        self._attr_native_min_value,
+                        device_max is not None
+                        and device_max < self._attr_native_min_value,
+                    )
+                    if (
+                        device_max is not None
+                        and device_max < self._attr_native_min_value
+                    ):
+                        raise ServiceValidationError(
+                            translation_domain=DOMAIN,
+                            translation_key="charge_power_too_low",
+                            translation_placeholders={"power": str(device_max)},
+                        )
+                elif direction == "discharge" and self._max_discharge_power_entity:
+                    raw = data.get(self._max_discharge_power_entity)
+                    device_max = abs(int(raw)) if raw is not None else None
+                    _LOGGER.warning(
+                        "Discharge capacity check | raw=%s, device_max=%s, min_value=%s, will_reject=%s",
+                        raw,
+                        device_max,
+                        self._attr_native_min_value,
+                        device_max is not None
+                        and device_max < self._attr_native_min_value,
+                    )
+                    if (
+                        device_max is not None
+                        and device_max < self._attr_native_min_value
+                    ):
+                        raise ServiceValidationError(
+                            translation_domain=DOMAIN,
+                            translation_key="discharge_power_too_low",
+                            translation_placeholders={"power": str(device_max)},
+                        )
         write_value = value
         gain = self._config.get("gain", 1)
         if gain != 1:
             write_value = value * gain
 
-        # Check if direction_entity is configured for combined power setpoint
-        # Store direction for logging purpose
         direction = None
-        direction_entity = self._config.get("direction_entity")
         if direction_entity:
             # STRICT MODE: ONLY use user's explicit selection, NEVER fallback to device
             direction = self.coordinator.get_user_selection(direction_entity)
 
             if direction is None:
                 # User has NOT selected direction - REJECT the operation
-                _LOGGER.error("Battery charge/discharge direction not set! Please select direction first.")
+                _LOGGER.error(
+                    "Battery charge/discharge direction not set! Please select direction first."
+                )
                 _LOGGER.error(
                     "Battery direction not set! Please select charge/discharge direction first."
                 )
@@ -386,7 +478,9 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                     write_value,
                 )
 
-        _LOGGER.info(
+        dlog = self.coordinator.device_logger
+
+        dlog.warning(
             "Writing number %s | address=%d (0x%04X), user_value=%s, raw_value=%s, data_type=%s, gain=%s",
             self._entity_key,
             address,
@@ -398,13 +492,13 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
         )
 
         try:
-            success = await self.coordinator.modbus_manager.write_register(
+            result = await self.coordinator.modbus_manager.write_register(
                 address,
                 int(write_value),
                 data_type,
             )
 
-            if success:
+            if result.success:
                 # Store user's input value
                 gain = self._config.get("gain", 1)
                 user_value = int(value) if gain == 1 else value
@@ -474,24 +568,27 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                     blocking=False,
                 )
 
-                # Update state immediately
                 self.async_write_ha_state()
 
-                _LOGGER.warning(warning_log)
+                dlog.warning(warning_log)
             else:
-                _LOGGER.warning(
-                    "Write number FAILED | %s: user_value=%s, raw_value=%s, address=%d (0x%04X)",
+                dlog.error(
+                    "Write number FAILED | entity=%s, user_value=%s, raw_value=%s, address=%d (0x%04X), "
+                    "reason=%s, raw_response=%s, tx_frame=%s",
                     self._entity_key,
                     value,
                     write_value,
                     address,
                     address,
+                    result.error_reason,
+                    result.raw_response or "N/A",
+                    result.tx_frame or "N/A",
                 )
                 # Only refresh on failure to restore correct state
                 await self.coordinator.async_request_refresh()
 
         except Exception as e:
-            _LOGGER.error(
+            dlog.error(
                 "Write number EXCEPTION | %s: user_value=%s, raw_value=%s, address=%d (0x%04X), error=%s",
                 self._entity_key,
                 value,
@@ -551,5 +648,25 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
         gain = self._config.get("gain", 1)
         if gain != 1:
             attrs["gain"] = gain
+
+        # Add dynamic power limits for direction-dependent entities
+        if self._max_charge_power_entity or self._max_discharge_power_entity:
+            attrs["min_power"] = int(self._attr_native_min_value)
+            attrs["max_power"] = int(self.native_max_value)
+
+            data = self.coordinator.data if self.coordinator.data else {}
+            if self._max_charge_power_entity:
+                raw = data.get(self._max_charge_power_entity)
+                attrs["max_charge_power"] = abs(int(raw)) if raw is not None else "N/A"
+            if self._max_discharge_power_entity:
+                raw = data.get(self._max_discharge_power_entity)
+                attrs["max_discharge_power"] = (
+                    abs(int(raw)) if raw is not None else "N/A"
+                )
+
+            direction_entity = self._config.get("direction_entity")
+            if direction_entity:
+                direction = self.coordinator.get_user_selection(direction_entity)
+                attrs["current_direction"] = direction or "not set"
 
         return attrs
