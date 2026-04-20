@@ -1,0 +1,44 @@
+name: Device Support Request
+description: Request support for a new Anker Solix device
+title: "[Device]: "
+labels: ["device-support"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Want us to support a new device? Please provide the details below.
+
+  - type: input
+    id: device_model
+    attributes:
+      label: Device Model
+      description: The full model name of the device.
+      placeholder: e.g., Anker SOLIX Solarbank Max AC
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_data
+    attributes:
+      label: Expected Data
+      description: What data/sensors would you expect to read from this device?
+      placeholder: |
+        e.g.,
+        - Battery level
+        - Solar input power
+        - Daily energy production
+    validations:
+      required: true
+
+  - type: textarea
+    id: control_commands
+    attributes:
+      label: Control Commands
+      description: What controls/commands would you like to be able to send to this device?
+      placeholder: |
+        e.g.,
+        - Set output power limit
+        - Switch charging mode
+        - Turn on/off AC output
+    validations:
+      required: true

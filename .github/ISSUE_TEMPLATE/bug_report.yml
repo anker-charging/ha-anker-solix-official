@@ -1,0 +1,51 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the information below to help us investigate.
+
+  - type: input
+    id: version
+    attributes:
+      label: Integration Version
+      description: Which version of this integration are you using?
+      placeholder: e.g., 1.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device
+    attributes:
+      label: Anker Solix Device
+      description: Which device(s) are affected?
+      multiple: true
+      options:
+        - Anker SOLIX Solarbank Max AC
+        - Anker SOLIX Smart Meter Gen 2
+        - Anker SOLIX Smart Plug
+        - Other (please specify in description)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of what the bug is.
+      placeholder: Describe what happened and what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: |
+        Please provide any relevant log output. You can find logs in Home Assistant under Settings > System > Logs.
+      render: text
+    validations:
+      required: false
