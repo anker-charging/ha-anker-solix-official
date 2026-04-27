@@ -1,0 +1,355 @@
+# =============================================================================
+# Anker Solix Device Configuration File
+# =============================================================================
+
+# Product information
+# default_name: Default product name (used when product code not found or SN not available)
+# product_code_mapping: Map product code to specific product name
+# sn_register_key: The data point key for reading SN (e.g., "device_sn")
+# model_register_key: The data point key to override with product name (default: "device_model")
+product_info:
+  default_name: "Solarbank 4 E5000 Pro"
+  sn_register_key: "device_sn"
+  model_register_key: "device_model"
+  auto_mode_on_connect: 3
+  product_code_mapping:
+    # Solarbank 4 E5000 Pro
+    "DN7M": "Solarbank 4 E5000 Pro"
+    "DPM4": "Solarbank 4 E5000 Pro"
+
+# Batch read ranges with register type specification
+# holding: read_holding_registers (function code 03) - for RW registers
+# input: read_input_registers (function code 04) - for RO registers
+batch_read_ranges:
+  input:
+    - 10000-10050
+    - 10090-10156
+    - 10208-10265
+    - 32768-32774
+  holding:
+    - 10060-10072
+    - 10074-10081
+
+# =======================================================================
+# Read Quantities Configuration (Sensor Type)
+# =======================================================================
+read_quantities:
+  # Device information data points
+  device_model:
+    translation_key: "device_model"
+    address: 32768
+    data_type: "STRING"
+    unit: "/"
+    gain: 1
+    count: 5
+    icon: "mdi:information"
+
+  device_sn:
+    translation_key: "device_sn"
+    address: 10100
+    data_type: "STRING"
+    unit: "/"
+    gain: 1
+    count: 12
+    icon: "mdi:identifier"
+
+  device_sw_version:
+    translation_key: "device_sw_version"
+    address: 10112
+    data_type: "STRING"
+    unit: "/"
+    gain: 1
+    count: 6
+    icon: "mdi:information"
+
+  # Battery related data points
+  battery_soc:
+    translation_key: "battery_soc"
+    address: 10014
+    data_type: "UINT16"
+    unit: "%"
+    gain: 1
+    count: 1
+    icon: "mdi:battery"
+
+  # PV related data points
+  # PV power = sum of PCS PV power(10002) + third-party PV power(10004)
+  pv_power:
+    translation_key: "pv_power"
+    address: 10002
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:solar-power"
+    additional_sources:
+      - "third_party_pv_power"
+
+  # Third-party PV power (internal use, not displayed directly)
+  third_party_pv_power:
+    translation_key: "third_party_pv_power"
+    address: 10004
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:solar-power-variant"
+    internal: true
+
+  # Battery charging power - shows charging power (negative values from register become positive)
+  # When discharging, this sensor shows 0
+  battery_charging_power:
+    translation_key: "battery_charging_power"
+    address: 10008
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:battery-charging"
+    power_split_mode: "negative_only"
+
+  # Battery discharging power - shows discharging power (positive values from register)
+  # When charging, this sensor shows 0
+  battery_discharging_power:
+    translation_key: "battery_discharging_power"
+    address: 10008
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:battery-arrow-down"
+    power_split_mode: "positive_only"
+  load_power:
+    translation_key: "load_power"
+    address: 10010
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:home-lightning-bolt"
+  # Grid import power - shows power imported from grid (positive values from register)
+  # When exporting to grid, this sensor shows 0
+  grid_import_power:
+    translation_key: "grid_import_power"
+    address: 10012
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:transmission-tower-import"
+    power_split_mode: "positive_only"
+
+  # Grid export power - shows power exported to grid (negative values from register become positive)
+  # When importing from grid, this sensor shows 0
+  grid_export_power:
+    translation_key: "grid_export_power"
+    address: 10012
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:transmission-tower-export"
+    power_split_mode: "negative_only"
+
+  ac_grid_output_power:
+    translation_key: "ac_grid_output_power"
+    address: 10208
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:transmission-tower-export"
+    power_direction_format:
+      positive: "Export"
+      negative: "Import"
+
+  pv_total_generation:
+    translation_key: "pv_total_generation"
+    address: 10018
+    data_type: "UINT32"
+    unit: "kWh"
+    gain: 10
+    count: 2
+    icon: "mdi:counter"
+
+  # Battery energy totals
+  cumulative_charge_energy:
+    translation_key: "cumulative_charge_energy"
+    address: 10262
+    data_type: "UINT32"
+    unit: "kWh"
+    gain: 10
+    count: 2
+    icon: "mdi:battery-plus"
+
+  cumulative_discharge_energy:
+    translation_key: "cumulative_discharge_energy"
+    address: 10264
+    data_type: "UINT32"
+    unit: "kWh"
+    gain: 10
+    count: 2
+    icon: "mdi:battery-minus"
+
+  rated_energy:
+    translation_key: "rated_energy"
+    address: 10250
+    data_type: "UINT32"
+    unit: "kWh"
+    gain: 10
+    count: 2
+    icon: "mdi:battery"
+
+  battery_status:
+    translation_key: "battery_status"
+    address: 10001
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    icon: "mdi:battery"
+    value_mapping:
+      0: "standby"
+      1: "charging"
+      2: "discharging"
+      3: "sleep"
+
+  max_charge_power:
+    translation_key: "max_charge_power"
+    address: 10036
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:battery-charging-high"
+    internal: true
+
+  max_discharge_power:
+    translation_key: "max_discharge_power"
+    address: 10038
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:battery-arrow-down-outline"
+    internal: true
+
+  ems_mode_mask:
+    translation_key: "ems_mode_mask"
+    address: 32774
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    icon: "mdi:format-list-checks"
+    internal: true
+
+# =======================================================================
+# Write Quantities Configuration (Control Type)
+# =======================================================================
+write_quantities:
+  # Enumeration selection type control
+  enumeration_selection:
+    # Operating mode control
+    # - Reads current mode from address 10064
+    # - Writes new mode to address 10064
+    # - Options filtered by ems_mode_mask (0x8006) capability bits
+    operating_mode:
+      translation_key: "operating_mode"
+      address: 10064
+      data_type: "UINT16"
+      unit: "/"
+      gain: 1
+      count: 1
+      icon: "mdi:cog"
+      control_type: "select"
+      write_protection_duration: 15  # Prevent UI flashing during mode transition
+      capability_entity: "ems_mode_mask"
+      # Options filtered by ems_mode_mask capability bits
+      # Only modes defined in 0x8006 are shown
+      options:
+        "0": "self_consumption"
+        "1": "tou_mode"
+        "3": "third_party_control"
+        "4": "custom_mode"
+        "5": "socket_overlay_mode"
+        "6": "smart_mode"
+        "7": "dynamic_pricing"
+      # Maps 10064 value to 0x8006 bit position
+      # 0x8006: BIT0=Self-consumption, BIT1=TOU, BIT2=Custom, BIT3=Smart, BIT4=Socket overlay, BIT5=Third-party ctrl, BIT6=Dynamic pricing
+      option_capability_bits:
+        "0": 0    # 10064 value 0 (self_consumption) <- 0x8006 BIT0
+        "1": 1    # 10064 value 1 (tou_mode) <- 0x8006 BIT1
+        "3": 5    # 10064 value 3 (third_party_control) <- 0x8006 BIT5
+        "4": 2    # 10064 value 4 (custom_mode) <- 0x8006 BIT2
+        "5": 4    # 10064 value 5 (socket_overlay_mode) <- 0x8006 BIT4
+        "6": 3    # 10064 value 6 (smart_mode) <- 0x8006 BIT3
+        "7": 6    # 10064 value 7 (dynamic_pricing) <- 0x8006 BIT6
+
+    # Battery power direction selector (charge/discharge)
+    # Only visible when user selects third_party_control mode (value=3)
+    battery_power_direction:
+      translation_key: "battery_power_direction"
+      address: 10071
+      data_type: "INT32"
+      unit: "/"
+      gain: 1
+      count: 2
+      icon: "mdi:battery-sync"
+      control_type: "select"
+      options:
+        "0": "charge"
+        "1": "discharge"
+      is_direction_selector: true
+      visibility_entity: "operating_mode"
+      visibility_value: 3
+
+# =======================================================================
+# Number Input Controls (write - numeric)
+# =======================================================================
+control_items:
+  # Combined power setpoint (works with battery_power_direction)
+  # Only visible when user selects third_party_control mode (value=3)
+  battery_power_setpoint:
+    translation_key: "battery_power_setpoint"
+    address: 10071
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:lightning-bolt"
+    data_type_category: "control"
+    display_type: "input"
+    min_value: 100
+    max_value: 10000
+    step: 1
+    direction_entity: "battery_power_direction"
+    max_charge_power_entity: "max_charge_power"
+    max_discharge_power_entity: "max_discharge_power"
+    visibility_entity: "operating_mode"
+    visibility_value: 3
+    never_read_device: true  # NEVER read from device, only show user's input
+    default_value: 100  # Default value when user hasn't set anything (must >= min_value)
+
+# =============================================================================
+# Configuration Instructions
+# =============================================================================
+#
+# 1. All entity names are defined using translation_key
+# 2. Translations are maintained in translations/en.json and translations/zh-Hans.json
+# 3. Read Quantities Configuration (read_quantities):
+#    - Define all sensor type data points
+#    - Include address, data type, unit, gain and other information
+#    - Support value mapping (value_mapping) with translation keys
+#
+# 4. Write Quantities Configuration (write_quantities):
+#    - enumeration_selection: Enumeration selector control
+#    - Options use translation keys for multi-language support
+#
+# 5. Adding new data points:
+#    - Add new data point configuration under appropriate category
+#    - Ensure address does not conflict
+#    - Set appropriate icon and translation_key
+#    - Add corresponding translations to translation files
+#
+# =============================================================================
