@@ -20,6 +20,8 @@ This integration connects to your Anker Solix devices **locally** via Modbus TCP
 
 ## Supported Devices
 
+This integration is built for the **latest generation** of Anker Solix products, designed to take full advantage of their enhanced local Modbus TCP capabilities.
+
 | Device | Firmware Support |
 |--------|-----------------|
 | Anker SOLIX Smart Plug | Coming Soon |
@@ -29,6 +31,15 @@ This integration connects to your Anker Solix devices **locally** via Modbus TCP
 | Anker SOLIX Smart Meter Gen 2 | Coming Soon |
 
 More Anker Solix devices are being added progressively. Stay tuned for updates.
+
+### Other Anker Solix Products
+
+Due to current product roadmap prioritization, this project focuses on the latest generation of Anker SOLIX products to ensure stability, compatibility, and feature completeness. The following products are not part of the active integration scope. Anker provides official Modbus protocol documentation for reference:
+
+| Product | Modbus Documentation |
+|---------|---------------------|
+| Anker SOLIX X1 Series | [Modbus Protocol Reference](https://support.ankersolix.com/s/article/Anker-SOLIX-X1-Series-Modbus-Protocol) |
+| Anker SOLIX V1 Smart EV Charger | [Modbus Protocol Reference](https://support.ankersolix.com/s/article/Anker-SOLIX-V1-Smart-EV-Charger-Modbus-Protocol) |
 
 ## Prerequisites: Enable Modbus TCP in Anker App
 
