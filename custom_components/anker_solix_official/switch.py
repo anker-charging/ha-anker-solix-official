@@ -204,7 +204,7 @@ class AnkerSolixSwitch(AnkerSolixBaseEntity, SwitchEntity):
 
         dlog = self.coordinator.device_logger
 
-        dlog.warning(
+        dlog.debug(
             "Writing switch %s | address=%d (0x%04X), state='%s', value=%d, data_type=%s",
             self._entity_key,
             address,
@@ -251,7 +251,7 @@ class AnkerSolixSwitch(AnkerSolixBaseEntity, SwitchEntity):
                     blocking=False,
                 )
 
-                dlog.warning("📝 %s %s → %s", device_name, entity_name, state_display)
+                dlog.info("📝 %s %s → %s", device_name, entity_name, state_display)
             else:
                 dlog.error(
                     "Write switch FAILED | entity=%s, state='%s', value=%d, address=%d (0x%04X), "

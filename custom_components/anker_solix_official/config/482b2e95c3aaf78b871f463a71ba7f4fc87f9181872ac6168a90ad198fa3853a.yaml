@@ -163,9 +163,6 @@ read_quantities:
     gain: 1
     count: 2
     icon: "mdi:transmission-tower-export"
-    power_direction_format:
-      positive: "Export"
-      negative: "Import"
 
   pv_total_generation:
     translation_key: "pv_total_generation"

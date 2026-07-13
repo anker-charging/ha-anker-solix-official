@@ -58,7 +58,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         self.modbus_manager.initialize(self.ip_address, self.port, self.device_name)
 
         self.update_interval = timedelta(seconds=self.scan_interval)
-        self.device_logger.warning(
+        self.device_logger.info(
             "Coordinator initialized (scan interval: %ds)", self.scan_interval
         )
 
@@ -660,15 +660,13 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                 pn_hash, raw_pn, raw_hex = result
                 if pn_hash:
                     self.logger.info(
-                        "Device PN read successfully - Raw PN: '%s', MD5: '%s', Registers: [%s]",
-                        raw_pn,
+                        "Device PN read successfully - hash: '%s', Registers: [%s]",
                         pn_hash,
                         raw_hex,
                     )
                 else:
                     self.logger.warning(
-                        "Failed to read device PN - Raw: '%s', Registers: [%s]",
-                        raw_pn,
+                        "Failed to read device PN - Registers: [%s]",
                         raw_hex,
                     )
                 return result
@@ -690,25 +688,28 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         # Check if device-specific config exists
         config_file = f"config/{pn_hash}.yaml"
         from pathlib import Path
+        import asyncio
 
         config_path = Path(__file__).resolve().parent / config_file
+
+        loop = asyncio.get_event_loop()
+        path_exists = await loop.run_in_executor(None, config_path.exists)
 
         self.logger.debug(
             "Looking for config file - PN='%s', path='%s', exists=%s",
             pn_hash,
             config_path,
-            config_path.exists(),
+            path_exists,
         )
 
-        if config_path.exists():
+        if path_exists:
             self.logger.info("Found device-specific config: %s", config_file)
             return config_file
         else:
             self.logger.error(
-                "Device PN '%s' is not supported - Raw PN: '%s', Registers: [%s], "
+                "Device PN hash '%s' is not supported - Registers: [%s], "
                 "config file %s not found at %s",
                 pn_hash,
-                raw_pn,
                 raw_hex,
                 config_file,
                 config_path,

@@ -284,7 +284,7 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
 
         dlog = self.coordinator.device_logger
 
-        dlog.warning(
+        dlog.debug(
             "Writing select %s | address=%d (0x%04X), option='%s', value=%d, data_type=%s",
             self._entity_key,
             address,
@@ -300,7 +300,7 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
             )
 
             if result.success:
-                dlog.warning(
+                dlog.debug(
                     "Write select SUCCESS | %s: option='%s', value=%d, address=%d (0x%04X)",
                     self._entity_key,
                     option,
@@ -335,7 +335,7 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
                     blocking=False,
                 )
 
-                dlog.warning("📝 %s → %s", entity_name, display_option)
+                dlog.info("📝 %s → %s", entity_name, display_option)
             else:
                 dlog.error(
                     "Write select FAILED | entity=%s, option='%s', value=%d, address=%d (0x%04X), "

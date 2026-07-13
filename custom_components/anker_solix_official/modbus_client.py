@@ -217,7 +217,7 @@ class AnkerSolixModbusClient:
             if log_level == "error":
                 self._logger.error(log_message)
             else:
-                self._logger.warning(log_message)
+                self._logger.info(log_message)
 
             self._last_error_log_time = current_time
             self._error_count_since_last_log = 0
@@ -261,7 +261,7 @@ class AnkerSolixModbusClient:
 
         # Defensive check: ensure no None values in registers list
         if any(r is None for r in registers):
-            self._logger.warning(
+            self._logger.debug(
                 "Register %d contains None values: %s, returning default",
                 address,
                 registers,
@@ -276,7 +276,7 @@ class AnkerSolixModbusClient:
                 value = raw if raw < 0x8000 else raw - 0x10000
             elif data_type == "INT32":
                 if len(registers) < 2:
-                    self._logger.warning(
+                    self._logger.debug(
                         "Register %d requires 2 values for INT32, got %d",
                         address,
                         len(registers),
@@ -292,7 +292,7 @@ class AnkerSolixModbusClient:
                     value = unsigned
             elif data_type == "UINT32":
                 if len(registers) < 2:
-                    self._logger.warning(
+                    self._logger.debug(
                         "Register %d requires 2 values for UINT32, got %d",
                         address,
                         len(registers),
@@ -345,7 +345,7 @@ class AnkerSolixModbusClient:
                         "Decoded string at address %d: '%s'", address, value
                     )
                 except (UnicodeDecodeError, ValueError) as err:
-                    self._logger.warning(
+                    self._logger.debug(
                         "String decoding failed for address %d: %s", address, err
                     )
                     value = ""
@@ -357,7 +357,7 @@ class AnkerSolixModbusClient:
             )
             return value
         except Exception as err:
-            self._logger.warning(
+            self._logger.debug(
                 "Failed to decode register %d (%s): %s", address, data_type, err
             )
             return self._default_value(data_type)
@@ -432,7 +432,7 @@ class AnkerSolixModbusClient:
                     result, "data", None
                 )
                 if not registers:
-                    self._logger.warning("Device PN registers returned empty")
+                    self._logger.info("Device PN registers returned empty")
                     return ("", "", "")
 
                 # Raw register data (hex format)
@@ -451,7 +451,7 @@ class AnkerSolixModbusClient:
                 # Strip all spaces and null characters from the device PN
                 device_pn = device_pn_raw.replace(" ", "").replace("\x00", "").strip()
                 if not device_pn:
-                    self._logger.warning(
+                    self._logger.info(
                         "Device PN is empty after cleaning, raw='%s'", device_pn_raw
                     )
                     return ("", device_pn_raw, raw_hex)
@@ -470,7 +470,7 @@ class AnkerSolixModbusClient:
                     f"Connection error reading device PN (attempt {attempt + 1}): {e}"
                 )
                 self._handle_connection_error(error_msg)
-                self._logger.warning(error_msg)
+                self._logger.info(error_msg)
                 # Force disconnect before retry
                 self._force_disconnect()
                 if attempt == 0:
@@ -533,14 +533,14 @@ class AnkerSolixModbusClient:
         else:
             # Normal response
             if func_code == 0x06:
-                self._logger.warning(
+                self._logger.debug(
                     "RX OK | [FC=0x%02X(WriteSingleReg)] addr=%d(0x%04X) write success",
                     func_code,
                     address,
                     address,
                 )
             elif func_code == 0x10:
-                self._logger.warning(
+                self._logger.debug(
                     "RX OK | [FC=0x%02X(WriteMultiReg)] addr=%d(0x%04X), count=%d write success",
                     func_code,
                     address,
@@ -561,7 +561,7 @@ class AnkerSolixModbusClient:
         except Exception:
             pass
 
-        self._logger.warning(
+        self._logger.debug(
             "Write register PRE-CHECK | address=%d (0x%04X), value=%s, data_type=%s, is_connected=%s, socket_open=%s",
             address,
             address,
@@ -598,7 +598,7 @@ class AnkerSolixModbusClient:
                 raw_registers = [int(value) & 0xFFFF]
                 func_code = 0x06
                 tx_frame = self._format_modbus_frame(func_code, address, raw_registers)
-                self._logger.warning("TX | %s", tx_frame)
+                self._logger.debug("TX | %s", tx_frame)
                 result = self.client.write_register(address=address, value=int(value))
             elif data_type == "INT32":
                 int_value = int(value)
@@ -608,7 +608,7 @@ class AnkerSolixModbusClient:
                 raw_registers = [high, low]
                 func_code = 0x10
                 tx_frame = self._format_modbus_frame(func_code, address, raw_registers)
-                self._logger.warning(
+                self._logger.debug(
                     "TX | %s (raw=%s, big-endian: high=0x%04X, low=0x%04X)",
                     tx_frame,
                     value,
@@ -624,7 +624,7 @@ class AnkerSolixModbusClient:
                 raw_registers = [high, low]
                 func_code = 0x10
                 tx_frame = self._format_modbus_frame(func_code, address, raw_registers)
-                self._logger.warning(
+                self._logger.debug(
                     "TX | %s (raw=%s, big-endian: high=0x%04X, low=0x%04X)",
                     tx_frame,
                     value,
@@ -638,7 +638,7 @@ class AnkerSolixModbusClient:
                 raw_registers = [int(value) & 0xFFFF]
                 func_code = 0x06
                 tx_frame = self._format_modbus_frame(func_code, address, raw_registers)
-                self._logger.warning("TX | %s", tx_frame)
+                self._logger.debug("TX | %s", tx_frame)
                 result = self.client.write_register(address=address, value=int(value))
 
             # Format raw registers for error logging
@@ -688,7 +688,7 @@ class AnkerSolixModbusClient:
                     tx_frame=tx_frame,
                 )
 
-            self._logger.warning(
+            self._logger.debug(
                 "Write register SUCCESS | address=%d (0x%04X), value=%s, data_type=%s, raw_registers=[%s]",
                 address,
                 address,
@@ -712,7 +712,7 @@ class AnkerSolixModbusClient:
                 error_str,
             )
             if "No response received" in error_str:
-                self._logger.warning(
+                self._logger.debug(
                     "📝 Write SUCCESS (device responded) | address=%d (0x%04X), value=%s, data_type=%s",
                     address,
                     address,
@@ -775,7 +775,7 @@ class AnkerSolixModbusClient:
             Dictionary of data point values
         """
         if data_points is None:
-            self._logger.warning("No data points provided, cannot read data")
+            self._logger.info("No data points provided, cannot read data")
             return {}
 
         self._logger.debug(
@@ -833,10 +833,12 @@ class AnkerSolixModbusClient:
                     self._handle_connection_error(
                         f"Exception reading configured range {start}-{end} ({reg_type}): {exc}"
                     )
+                    for addr in range(start, end + 1):
+                        self._last_failed_registers.add(addr)
                     continue
 
                 if not result or result.isError():
-                    self._logger.warning(
+                    self._logger.info(
                         "Failed to read configured range %d-%d (%s): %s, trying individual reads",
                         start,
                         end,
@@ -913,6 +915,8 @@ class AnkerSolixModbusClient:
                         register_count,
                         len(registers) if registers else 0,
                     )
+                    for addr in range(start, end + 1):
+                        self._last_failed_registers.add(addr)
                     continue
 
                 range_data[(start, end)] = registers
@@ -943,6 +947,7 @@ class AnkerSolixModbusClient:
                             config.get("data_type", "UINT16")
                         )
                         failed_reads += 1
+                        self._last_failed_registers.add(int(config["address"]))
                     continue
 
                 if not result or result.isError():
@@ -1032,7 +1037,7 @@ class AnkerSolixModbusClient:
                             config.get("data_type", "UINT16")
                         )
                         failed_reads += 1
-                        self._logger.warning(
+                        self._logger.debug(
                             "Failed to decode batch data point %s: %s", key, exc
                         )
 
@@ -1045,7 +1050,7 @@ class AnkerSolixModbusClient:
             except (KeyError, TypeError, ValueError):
                 data[key] = self._default_value(config.get("data_type", "UINT16"))
                 failed_reads += 1
-                self._logger.warning(
+                self._logger.debug(
                     "Invalid configuration for data point %s: %s", key, config
                 )
                 continue
@@ -1108,12 +1113,12 @@ class AnkerSolixModbusClient:
             except (IndexError, KeyError, ValueError, TypeError) as e:
                 data[key] = self._default_value(config.get("data_type", "UINT16"))
                 failed_reads += 1
-                self._logger.warning(
+                self._logger.debug(
                     "Failed to decode data point %s from configured range: %s", key, e
                 )
 
         if failed_reads:
-            self._logger.warning(
+            self._logger.info(
                 "Batch read completed with partial failures: %d successful, %d failed",
                 successful_reads,
                 failed_reads,

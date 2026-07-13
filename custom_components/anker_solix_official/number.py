@@ -487,8 +487,8 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                             },
                         )
             else:
-                _LOGGER.warning(
-                    "Unknown value_constraint rule type '%s' for entity %s, skipping",
+                _LOGGER.debug(
+                    "Unknown value constraint rule type '%s' for entity %s, skipping",
                     rule_type,
                     self._entity_key,
                 )
@@ -523,7 +523,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
         ):
             direction = self.coordinator.get_user_selection(direction_entity)
             data = self.coordinator.data
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Power capacity check | entity=%s, value=%s, direction=%s, "
                 "has_data=%s, max_charge_entity=%s, max_discharge_entity=%s",
                 self._entity_key,
@@ -537,7 +537,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                 if direction == "charge" and self._max_charge_power_entity:
                     raw = data.get(self._max_charge_power_entity)
                     device_max = abs(int(raw)) if raw is not None else None
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Charge capacity check | raw=%s, device_max=%s, min_value=%s, will_reject=%s",
                         raw,
                         device_max,
@@ -557,7 +557,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                 elif direction == "discharge" and self._max_discharge_power_entity:
                     raw = data.get(self._max_discharge_power_entity)
                     device_max = abs(int(raw)) if raw is not None else None
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Discharge capacity check | raw=%s, device_max=%s, min_value=%s, will_reject=%s",
                         raw,
                         device_max,
@@ -596,10 +596,10 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
             if direction is None:
                 # User has NOT selected direction - REJECT the operation
-                _LOGGER.error(
+                _LOGGER.warning(
                     "Battery charge/discharge direction not set! Please select direction first."
                 )
-                _LOGGER.error(
+                _LOGGER.warning(
                     "Battery direction not set! Please select charge/discharge direction first."
                 )
 
@@ -651,7 +651,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
         dlog = self.coordinator.device_logger
 
-        dlog.warning(
+        dlog.info(
             "Writing number %s | address=%d (0x%04X), user_value=%s, raw_value=%s, data_type=%s, gain=%s",
             self._entity_key,
             address,
@@ -743,7 +743,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
                 self.async_write_ha_state()
 
-                dlog.warning(warning_log)
+                dlog.info(warning_log)
             else:
                 dlog.error(
                     "Write number FAILED | entity=%s, user_value=%s, raw_value=%s, address=%d (0x%04X), "
