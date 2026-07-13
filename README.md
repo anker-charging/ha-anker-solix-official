@@ -20,7 +20,7 @@ This integration connects to your Anker Solix devices **locally** via Modbus TCP
 
 ## Supported Devices
 
-This integration is built for the **latest generation** of Anker Solix products, designed to take full advantage of their enhanced local Modbus TCP capabilities.
+This integration is built for select Anker Solix products, designed to take full advantage of their enhanced local Modbus TCP capabilities.
 
 | Device | Firmware Support |
 |--------|-----------------|
@@ -34,7 +34,7 @@ More Anker Solix devices are being added progressively. Stay tuned for updates.
 
 ### Other Anker Solix Products
 
-Due to current product roadmap prioritization, this project focuses on the latest generation of Anker SOLIX products to ensure stability, compatibility, and feature completeness. The following products are not part of the active integration scope. Anker provides official Modbus protocol documentation for reference:
+Due to current product roadmap prioritization, this project focuses on select Anker SOLIX products to ensure stability, compatibility, and feature completeness. The following products are not part of the active integration scope. Anker provides official Modbus protocol documentation for reference:
 
 | Product | Modbus Documentation |
 |---------|---------------------|
