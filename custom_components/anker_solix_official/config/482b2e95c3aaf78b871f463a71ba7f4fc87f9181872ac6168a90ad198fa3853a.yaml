@@ -261,27 +261,8 @@ read_quantities:
     internal: true
 
   # =======================================================================
-  # Parallel machine linkage registers (TODO: addresses to be confirmed)
+  # Parallel machine capability negotiation register (TODO: address to be confirmed)
   # =======================================================================
-  is_master:
-    address: 0xTODO
-    data_type: "UINT16"
-    unit: "/"
-    gain: 1
-    count: 1
-    value_mapping:
-      0: "slave"
-      1: "master"
-    internal: true
-
-  master_ip:
-    address: 0xTODO
-    data_type: "STRING"
-    unit: "/"
-    gain: 1
-    count: 8
-    internal: true
-
   parallel_capability_mask:
     address: 0xTODO
     data_type: "UINT16"

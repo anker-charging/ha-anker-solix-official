@@ -170,27 +170,6 @@ class AnkerSolixModbusClient:
                 )
             return False
 
-    def switch_target(self, ip_address: str, port: int = 502) -> bool:
-        """Switch connection target to a new IP address.
-        
-        Args:
-            ip_address: New IP address to connect to
-            port: Port number (default 502)
-            
-        Returns:
-            bool: True if connection successful, False otherwise
-        """
-        self._logger.info(
-            "Switching connection target from %s:%d to %s:%d",
-            self.ip_address, self.port, ip_address, port
-        )
-        
-        self.ip_address = ip_address
-        self.port = port
-        self.device_name = f"{ip_address}:{port}"
-        
-        return self.connect()
-
     def disconnect(self):
         """Disconnect."""
         try:
@@ -202,30 +181,6 @@ class AnkerSolixModbusClient:
             )
         except (OSError, AttributeError) as e:
             self._logger.error("Error during disconnect: %s", e)
-
-    def switch_target(self, ip_address: str, port: int = 502) -> bool:
-        """Switch connection target to a new IP address and port.
-
-        Args:
-            ip_address: New IP address to connect to
-            port: New port number (default 502)
-
-        Returns:
-            bool: True if connection successful, False otherwise
-        """
-        self._logger.info(
-            "Switching connection target from %s:%d to %s:%d",
-            self.ip_address,
-            self.port,
-            ip_address,
-            port,
-        )
-
-        self.ip_address = ip_address
-        self.port = port
-        self.device_name = f"{ip_address}:{port}"
-
-        return self.connect()
 
     def _handle_connection_error(self, error_msg: str = ""):
         """Handle connection error and update error tracking with throttled logging."""
