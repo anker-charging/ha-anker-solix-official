@@ -52,6 +52,21 @@ class ModbusConnectionManager:
             port,
         )
 
+    async def reinitialize(self, ip_address: str, port: int = 502) -> None:
+        """Reinitialize connection manager to a new target."""
+        self._logger.info(
+            "Reinitializing connection manager to %s:%d",
+            ip_address,
+            port,
+        )
+
+        self._ip_address = ip_address
+        self._port = port
+        self._device_name = f"{ip_address}:{port}"
+
+        self._client = None
+        await self._create_connection()
+
     async def get_client(self) -> Optional[AnkerSolixModbusClient]:
         """Get Modbus client connection"""
         if not self._is_initialized or not self._connection_lock:

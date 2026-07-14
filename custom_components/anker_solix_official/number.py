@@ -192,6 +192,23 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
             if not self.coordinator.is_register_available(self._register_address):
                 return False
 
+        # Check capability_entity + capability_bit (parallel machine capability negotiation)
+        capability_entity = self._config.get("capability_entity")
+        capability_bit = self._config.get("capability_bit")
+        if capability_entity and capability_bit is not None:
+            if self.coordinator.data:
+                mask_value = self.coordinator.data.get(capability_entity)
+                if mask_value is None:
+                    return False
+                try:
+                    mask = int(mask_value)
+                    if not (mask & (1 << capability_bit)):
+                        return False
+                except (ValueError, TypeError):
+                    return False
+            else:
+                return False
+
         # Check visibility condition
         visibility_entity = self._config.get("visibility_entity")
         if visibility_entity:
@@ -451,14 +468,11 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                 )
 
     def _validate_value_constraints(self, value: float) -> None:
-        """通用值约束验证引擎
+        """Validate value against configured constraints.
 
-        从 YAML 配置中读取 value_constraints.rules，逐条检查。
-        当前支持的规则类型：
-          - forbidden_range: 禁止某个数值范围 [min, max]（含边界）
-
-        未来可扩展：must_be_multiple_of / forbidden_values / allowed_ranges / condition 等，
-        只需在此方法中增加对应的 _check_xxx 分支即可，无需修改业务代码。
+        Supports multiple rule types:
+        - forbidden_range: Blocks operation with error if value in range
+        - warning_range: Shows soft warning but allows operation if value in range
         """
         constraints = self._config.get("value_constraints")
         if not constraints:
@@ -485,6 +499,21 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                                 "allowed_max": str(allowed_max),
                                 "value": str(int(value)),
                             },
+                        )
+            elif rule_type == "warning_range":
+                min_val = rule.get("min")
+                max_val = rule.get("max")
+                if min_val is not None and max_val is not None:
+                    if min_val <= value <= max_val:
+                        self.hass.async_create_task(
+                            self._show_soft_warning(
+                                warning_key=error_key,
+                                placeholders={
+                                    "warning_min": str(int(min_val)),
+                                    "warning_max": str(int(max_val)),
+                                    "value": str(int(value)),
+                                },
+                            )
                         )
             else:
                 _LOGGER.debug(

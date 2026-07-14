@@ -8,13 +8,19 @@
 # sn_register_key: The data point key for reading SN (e.g., "device_sn")
 # model_register_key: The data point key to override with product name (default: "device_model")
 product_info:
-  default_name: "Anker SOLIX Solarbank 4 E5000 Pro"
+  default_name: "Anker SOLIX Solarbank Max"
   sn_register_key: "device_sn"
   model_register_key: "device_model"
   auto_mode_on_connect: 3
   product_code_mapping:
-    "DN7M": "Anker SOLIX Solarbank 4 E5000 Pro"
-    "DPM4": "Anker SOLIX Solarbank 4 E5000 Pro"
+    "DMY6": "Anker SOLIX Solarbank Max"
+    "DN9U": "Anker SOLIX Solarbank Max"
+    "DPTK": "Anker SOLIX Solarbank Max"
+    "DNMT": "Anker SOLIX XE"
+    "DPP5": "Anker SOLIX XE"
+    "DNN4": "Anker SOLIX XE"
+    # TODO: Add AE113 SKU and model mapping when available
+    # "AE113": "Anker SOLIX [Model Name]"
 
 # Batch read ranges with register type specification
 # holding: read_holding_registers (function code 03) - for RW registers
@@ -241,6 +247,8 @@ read_quantities:
     icon: "mdi:format-list-checks"
     internal: true
 
+  # Backup SOC enable switch - controls whether backup SOC settings are active
+  # 0: Disable, 1: Enable
   backup_soc_enable:
     translation_key: "backup_soc_enable"
     address: 60003

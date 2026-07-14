@@ -240,6 +240,51 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
             translation_key=hint_key or "write_condition_not_met",
         )
 
+    async def _show_soft_warning(
+        self,
+        warning_key: str,
+        placeholders: dict[str, str] | None = None,
+    ) -> None:
+        """Show a non-blocking warning notification.
+
+        Uses persistent_notification to display a warning in the Notifications
+        panel (bell icon in sidebar). Does not block the operation.
+
+        Args:
+            warning_key: Translation key for the warning message.
+            placeholders: Optional dict of placeholder values for the message.
+        """
+        if not self.hass:
+            _LOGGER.warning("Cannot show soft warning: hass not available")
+            return
+
+        message = self.hass.data.get("translations", {}).get(
+            f"component.{DOMAIN}.exceptions.{warning_key}.message",
+            warning_key,
+        )
+
+        if placeholders:
+            for key, value in placeholders.items():
+                message = message.replace(f"{{{key}}}", str(value))
+
+        notification_id = f"{DOMAIN}_{warning_key}_{self._entity_key}"
+        await self.hass.services.async_call(
+            "persistent_notification",
+            "create",
+            {
+                "message": message,
+                "title": "Anker SOLIX Warning",
+                "notification_id": notification_id,
+            },
+        )
+
+        _LOGGER.info(
+            "Soft warning shown for %s: %s (placeholders: %s)",
+            self._entity_key,
+            warning_key,
+            placeholders,
+        )
+
 
 async def async_setup_entities_with_retry(
     hass: HomeAssistant,

@@ -260,6 +260,44 @@ read_quantities:
       1: "enabled"
     internal: true
 
+  # Parallel machine linkage registers (TODO: addresses pending firmware confirmation)
+  is_master:
+    translation_key: "is_master"
+    address: 0xTODO  # TODO: pending firmware confirmation
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    icon: "mdi:server-network"
+    value_mapping:
+      0: "slave"
+      1: "master"
+    internal: true
+
+  master_ip:
+    translation_key: "master_ip"
+    address: 0xTODO  # TODO: pending firmware confirmation
+    data_type: "STRING"
+    unit: "/"
+    gain: 1
+    count: 8  # IP address string (e.g., "192.168.1.100")
+    icon: "mdi:ip-network"
+    internal: true
+
+  parallel_capability_mask:
+    translation_key: "parallel_capability_mask"
+    address: 0xTODO  # TODO: pending firmware confirmation
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    icon: "mdi:feature-search"
+    internal: true
+    # BIT0: SOC charging limit supported
+    # BIT1: SOC discharge limit supported
+    # BIT2: Backup SOC supported
+    # BIT3: Backup SOC enable supported
+
 # =======================================================================
 # Write Quantities Configuration (Control Type)
 # =======================================================================
@@ -348,10 +386,10 @@ control_items:
     default_value: 0  # Default value when user hasn't set anything (must >= min_value)
     value_constraints:
       rules:
-        - type: "forbidden_range"
+        - type: "warning_range"
           min: 1
           max: 99
-          error_key: "power_range_1_to_99_not_allowed"
+          error_key: "power_below_optimal_range"
 
   charging_limit_soc:
     translation_key: "charging_limit_soc"
@@ -366,6 +404,8 @@ control_items:
     min_value: 80
     max_value: 100
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 0
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -386,6 +426,8 @@ control_items:
     min_value: 0
     max_value: 20
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 1
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -405,6 +447,8 @@ control_items:
     min_value: 0
     max_value: 100
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 2
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1

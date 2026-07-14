@@ -260,6 +260,36 @@ read_quantities:
       1: "enabled"
     internal: true
 
+  # =======================================================================
+  # Parallel machine linkage registers (TODO: addresses to be confirmed)
+  # =======================================================================
+  is_master:
+    address: 0xTODO
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    value_mapping:
+      0: "slave"
+      1: "master"
+    internal: true
+
+  master_ip:
+    address: 0xTODO
+    data_type: "STRING"
+    unit: "/"
+    gain: 1
+    count: 8
+    internal: true
+
+  parallel_capability_mask:
+    address: 0xTODO
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    internal: true
+
 # =======================================================================
 # Write Quantities Configuration (Control Type)
 # =======================================================================
@@ -348,10 +378,10 @@ control_items:
     default_value: 0  # Default value when user hasn't set anything (must >= min_value)
     value_constraints:
       rules:
-        - type: "forbidden_range"
+        - type: "warning_range"
           min: 1
           max: 99
-          error_key: "power_range_1_to_99_not_allowed"
+          error_key: "power_below_optimal_range"
 
   charging_limit_soc:
     translation_key: "charging_limit_soc"
@@ -366,6 +396,8 @@ control_items:
     min_value: 80
     max_value: 100
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 0
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -386,6 +418,8 @@ control_items:
     min_value: 0
     max_value: 20
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 1
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -405,6 +439,8 @@ control_items:
     min_value: 0
     max_value: 100
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 2
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1

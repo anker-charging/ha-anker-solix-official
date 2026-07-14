@@ -514,6 +514,53 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         except Exception as e:
             self.logger.debug("Failed to update unavailable registers: %s", e)
 
+    async def _check_master_status(self, data: dict[str, Any]) -> bool:
+        """Check parallel machine status and switch to master if needed.
+
+        Returns:
+            True: Current device is master (or no parallel config), continue normal flow
+            False: Triggered switch to master, need to reconnect
+        """
+        is_master_value = data.get("is_master")
+        if is_master_value is None:
+            return True
+
+        is_master = int(is_master_value) == 1
+        if is_master:
+            self.logger.debug("Device is master, continuing normal operation")
+            return True
+
+        self.logger.info("Device is slave, searching for master IP...")
+
+        master_ip = data.get("master_ip")
+        if not master_ip or master_ip.strip() == "":
+            self.logger.warning("No master IP found, will retry next poll")
+            return True
+
+        master_ip = master_ip.strip()
+        self.logger.info("Switching connection from slave to master: %s", master_ip)
+
+        self.ip_address = master_ip
+        self.port = 502
+
+        await self.modbus_manager.reinitialize(master_ip, self.port)
+
+        self._config_cache_valid = False
+        self._status = "disconnected"
+        self._connection_failed = False
+        self._consecutive_failures = 0
+
+        self._latest_data = {}
+        self.async_set_updated_data({})
+
+        self.modbus_manager.force_disconnect()
+
+        self.logger.info(
+            "Connection switch initiated, will reconnect to master: %s", master_ip
+        )
+
+        return False
+
     async def _auto_set_mode_on_connect(self, data: dict[str, Any]) -> None:
         """Auto-set operating mode on first connect if configured in YAML.
 
@@ -584,6 +631,55 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
         except Exception as e:
             self.logger.error("Error in auto-set mode on connect: %s", e)
+
+    async def _check_master_status(self, data: dict[str, Any]) -> bool:
+        """Check parallel machine status and switch to master if needed.
+
+        Returns:
+            True: Current device is master (or not parallel), continue normal flow
+            False: Switch triggered, need to reconnect
+        """
+        is_master_value = data.get("is_master")
+        if is_master_value is None:
+            return True
+
+        is_master = int(is_master_value) == 1
+        if is_master:
+            self.logger.debug("Device is master, continuing normal operation")
+            return True
+
+        self.logger.info("Device is slave, searching for master IP...")
+
+        master_ip = data.get("master_ip")
+        if not master_ip or master_ip.strip() == "":
+            self.logger.warning("No master IP found in master_ip register, will retry next poll")
+            return True
+
+        master_ip = master_ip.strip()
+        self.logger.info("Switching connection from slave to master: %s", master_ip)
+
+        self.ip_address = master_ip
+        self.port = 502
+
+        await self.modbus_manager.reinitialize(master_ip, self.port)
+
+        self._config_cache_valid = False
+        self._status = "disconnected"
+        self._connection_failed = False
+        self._consecutive_failures = 0
+
+        self._latest_data = {}
+        self.async_set_updated_data({})
+
+        self.modbus_manager.force_disconnect()
+
+        self.logger.info(
+            "Parallel machine linkage: switched from slave to master (%s). "
+            "Brief disconnection expected (≤10s).",
+            master_ip,
+        )
+
+        return False
 
     def _should_attempt_reconnection(self) -> bool:
         """Check if reconnection should be attempted."""
@@ -854,6 +950,11 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                     self._override_model_with_product_name(data)
                     self._inject_version_gates(data)
 
+                    # Check parallel machine status
+                    should_continue = await self._check_master_status(data)
+                    if not should_continue:
+                        continue
+
                     # Auto-set operating mode only on the very first ever connect.
                     # _initial_mode_sent is persisted to entry.options, so HA restarts
                     # and reconnections do NOT trigger this again.
@@ -979,7 +1080,11 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                             # Override model sensor value with product name (MUST do before publishing)
                             self._override_model_with_product_name(data)
                             self._inject_version_gates(data)
-        
+
+                            should_continue = await self._check_master_status(data)
+                            if not should_continue:
+                                continue
+
                             # Log data comparison for periodic reads
                             old_data = (
                                 self._latest_data.copy() if self._latest_data else None
