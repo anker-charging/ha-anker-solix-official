@@ -36,6 +36,10 @@ except ImportError:
         PYMODBUS_VERSION = "unknown"
 
 
+class _RegisterDecodeError(Exception):
+    """Malformed register data."""
+
+
 class AnkerSolixModbusClient:
     """Anker Solix TCP client class."""
 
@@ -257,7 +261,7 @@ class AnkerSolixModbusClient:
         """Decode register list into the correct Python value."""
         if not registers:
             self._logger.error("Register %d returned no data", address)
-            return self._default_value(data_type)
+            raise _RegisterDecodeError(f"Register {address} returned no data")
 
         # Defensive check: ensure no None values in registers list
         if any(r is None for r in registers):
@@ -266,7 +270,9 @@ class AnkerSolixModbusClient:
                 address,
                 registers,
             )
-            return self._default_value(data_type)
+            raise _RegisterDecodeError(
+                f"Register {address} contains None values: {registers}"
+            )
 
         try:
             if data_type == "UINT16":
@@ -281,7 +287,10 @@ class AnkerSolixModbusClient:
                         address,
                         len(registers),
                     )
-                    return self._default_value(data_type)
+                    raise _RegisterDecodeError(
+                        f"Register {address} requires 2 values for INT32, "
+                        f"got {len(registers)}"
+                    )
                 # Big-endian: registers[0] is high 16-bit, registers[1] is low 16-bit
                 high = registers[0] & 0xFFFF
                 low = registers[1] & 0xFFFF
@@ -297,7 +306,10 @@ class AnkerSolixModbusClient:
                         address,
                         len(registers),
                     )
-                    return self._default_value(data_type)
+                    raise _RegisterDecodeError(
+                        f"Register {address} requires 2 values for UINT32, "
+                        f"got {len(registers)}"
+                    )
                 # Big-endian: registers[0] is high 16-bit, registers[1] is low 16-bit
                 high = registers[0] & 0xFFFF
                 low = registers[1] & 0xFFFF
@@ -356,17 +368,21 @@ class AnkerSolixModbusClient:
                 "Decoded register %d -> %s (%s)", address, value, data_type
             )
             return value
+        except _RegisterDecodeError:
+            raise
         except Exception as err:
             self._logger.debug(
                 "Failed to decode register %d (%s): %s", address, data_type, err
             )
             return self._default_value(data_type)
 
-    def read_register(self, address: int, data_type: str, count: int = None) -> Any:
+    def read_register(
+        self, address: int, data_type: str, count: int = None
+    ) -> Any | None:
         """Read input register (function code 04)."""
         if not self._ensure_connection():
             self._logger.warning("Unable to read register %d, not connected", address)
-            return 0
+            return None
 
         if count is None:
             count = (
@@ -384,17 +400,18 @@ class AnkerSolixModbusClient:
 
             if not result or result.isError():
                 self._logger.error("Failed to read register %d: %s", address, result)
-                return 0
+                return None
 
             registers = getattr(result, "registers", None) or getattr(
                 result, "data", None
             )
-            value = self._decode_register_value(address, data_type, registers[:count])
-            return value
-        except (ConnectionError, OSError, TimeoutError, ValueError) as e:
-            # Use new error handling method
+            return self._decode_register_value(address, data_type, registers[:count])
+        except _RegisterDecodeError as e:
             self._handle_connection_error(f"Exception reading register {address}: {e}")
-            return 0
+            return None
+        except (ConnectionError, OSError, TimeoutError, ValueError) as e:
+            self._handle_connection_error(f"Exception reading register {address}: {e}")
+            return None
 
     def read_device_pn(self) -> tuple[str, str, str]:
         """Read device PN from register 0x8000 (32768) and return salted SHA-256 hash.
@@ -981,6 +998,7 @@ class AnkerSolixModbusClient:
                             config.get("data_type", "UINT16")
                         )
                         failed_reads += 1
+                        self._last_failed_registers.add(int(config["address"]))
                     continue
 
                 for key, config in group.data_points:
@@ -1037,6 +1055,8 @@ class AnkerSolixModbusClient:
                             config.get("data_type", "UINT16")
                         )
                         failed_reads += 1
+                        with contextlib.suppress(KeyError, ValueError, TypeError):
+                            self._last_failed_registers.add(int(config["address"]))
                         self._logger.debug(
                             "Failed to decode batch data point %s: %s", key, exc
                         )
@@ -1110,12 +1130,22 @@ class AnkerSolixModbusClient:
                     )
                 data[key] = value
                 successful_reads += 1
-            except (IndexError, KeyError, ValueError, TypeError) as e:
+                self._last_successful_registers.add(address)
+            except (
+                IndexError,
+                KeyError,
+                ValueError,
+                TypeError,
+                _RegisterDecodeError,
+            ) as e:
                 data[key] = self._default_value(config.get("data_type", "UINT16"))
                 failed_reads += 1
+                self._last_failed_registers.add(address)
                 self._logger.debug(
                     "Failed to decode data point %s from configured range: %s", key, e
                 )
+
+        self._last_successful_registers -= self._last_failed_registers
 
         if failed_reads:
             self._logger.info(
