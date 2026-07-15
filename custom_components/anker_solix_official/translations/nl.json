@@ -62,8 +62,8 @@
     "enable_backup_soc_first": {
       "message": "Deze functie vereist het inschakelen van de back-upreserveschakelaar in de instellingen van de Anker-app."
     },
-    "power_range_1_to_99_not_allowed": {
-      "message": "Vermogen kan niet worden ingesteld in het bereik van {forbidden_min}-{forbidden_max}W. Stel 0W of {allowed_min}-{allowed_max}W in."
+    "power_below_optimal_range": {
+      "message": "Vermogenssetpoint {value}W ligt onder het optimale werkbereik ({warning_min}-{warning_max}W). De regelnauwkeurigheid kan verminderd zijn."
     }
   },
   "entity": {

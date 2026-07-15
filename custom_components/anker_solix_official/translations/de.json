@@ -62,8 +62,8 @@
     "enable_backup_soc_first": {
       "message": "Diese Funktion erfordert das Aktivieren des Backup-Reserve-Schalters in den Einstellungen der Anker-App."
     },
-    "power_range_1_to_99_not_allowed": {
-      "message": "Die Leistung kann nicht im Bereich von {forbidden_min}-{forbidden_max}W eingestellt werden. Bitte stellen Sie 0W oder {allowed_min}-{allowed_max}W ein."
+    "power_below_optimal_range": {
+      "message": "Leistungssollwert {value}W liegt unter dem optimalen Betriebsbereich ({warning_min}-{warning_max}W). Die Regelgenauigkeit kann beeinträchtigt sein."
     }
   },
   "entity": {
