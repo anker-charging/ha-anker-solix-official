@@ -260,20 +260,17 @@ read_quantities:
       1: "enabled"
     internal: true
 
-  # Parallel machine capability negotiation register (TODO: address pending firmware confirmation)
+  # Parallel machine capability negotiation register
   parallel_capability_mask:
     translation_key: "parallel_capability_mask"
-    address: 0xTODO  # TODO: pending firmware confirmation
+    address: 0x8007
     data_type: "UINT16"
     unit: "/"
     gain: 1
     count: 1
     icon: "mdi:feature-search"
     internal: true
-    # BIT0: SOC charging limit supported
-    # BIT1: SOC discharge limit supported
-    # BIT2: Backup SOC supported
-    # BIT3: Backup SOC enable supported
+    # BIT0: Parallel SOC controls supported (charging limit / discharge limit / backup reserve)
 
 # =======================================================================
 # Write Quantities Configuration (Control Type)
@@ -404,7 +401,7 @@ control_items:
     max_value: 20
     step: 1
     capability_entity: "parallel_capability_mask"
-    capability_bit: 1
+    capability_bit: 0
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -425,7 +422,7 @@ control_items:
     max_value: 100
     step: 1
     capability_entity: "parallel_capability_mask"
-    capability_bit: 2
+    capability_bit: 0
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1

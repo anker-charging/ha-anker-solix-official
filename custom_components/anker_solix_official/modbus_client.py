@@ -1048,7 +1048,10 @@ class AnkerSolixModbusClient:
                 address = int(config["address"])
                 count = int(config.get("count", 1))
             except (KeyError, TypeError, ValueError):
-                data[key] = self._default_value(config.get("data_type", "UINT16"))
+                # Do not write a default value here: leaving the key absent
+                # lets downstream consumers (e.g. capability_entity checks)
+                # distinguish "never read" (key missing) from "read but
+                # decoded to 0".
                 failed_reads += 1
                 self._logger.debug(
                     "Invalid configuration for data point %s: %s", key, config

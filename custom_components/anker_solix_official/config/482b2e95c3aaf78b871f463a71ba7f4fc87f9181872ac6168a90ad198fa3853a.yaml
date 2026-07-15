@@ -261,10 +261,11 @@ read_quantities:
     internal: true
 
   # =======================================================================
-  # Parallel machine capability negotiation register (TODO: address to be confirmed)
+  # Parallel machine capability negotiation register
+  # BIT0: Parallel SOC controls supported (charging limit / discharge limit / backup reserve)
   # =======================================================================
   parallel_capability_mask:
-    address: 0xTODO
+    address: 0x8007
     data_type: "UINT16"
     unit: "/"
     gain: 1
@@ -400,7 +401,7 @@ control_items:
     max_value: 20
     step: 1
     capability_entity: "parallel_capability_mask"
-    capability_bit: 1
+    capability_bit: 0
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -421,7 +422,7 @@ control_items:
     max_value: 100
     step: 1
     capability_entity: "parallel_capability_mask"
-    capability_bit: 2
+    capability_bit: 0
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1

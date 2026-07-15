@@ -192,22 +192,8 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
             if not self.coordinator.is_register_available(self._register_address):
                 return False
 
-        # Check capability_entity + capability_bit (parallel machine capability negotiation)
-        capability_entity = self._config.get("capability_entity")
-        capability_bit = self._config.get("capability_bit")
-        if capability_entity and capability_bit is not None:
-            if self.coordinator.data:
-                mask_value = self.coordinator.data.get(capability_entity)
-                if mask_value is None:
-                    return False
-                try:
-                    mask = int(mask_value)
-                    if not (mask & (1 << capability_bit)):
-                        return False
-                except (ValueError, TypeError):
-                    return False
-            else:
-                return False
+        if not self._is_capability_supported():
+            return False
 
         # Check visibility condition
         visibility_entity = self._config.get("visibility_entity")

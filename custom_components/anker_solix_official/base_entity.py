@@ -65,6 +65,38 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
         
         return True
 
+    def _is_capability_supported(self) -> bool:
+        """Check capability_entity + capability_bit gate (parallel machine capability negotiation).
+
+        Returns True (fail-open) whenever the capability mask cannot be
+        determined yet: this covers both "never successfully read" (key
+        absent from coordinator.data, e.g. address still a TODO placeholder)
+        and "read attempt failed" (register marked unavailable via
+        is_register_available), so entities are only hidden once the mask
+        has actually been read and a bit is confirmed unset.
+        """
+        capability_entity = self._config.get("capability_entity")
+        capability_bit = self._config.get("capability_bit")
+        if not capability_entity or capability_bit is None:
+            return True
+
+        if not self.coordinator.data or capability_entity not in self.coordinator.data:
+            return True
+
+        mask_address = self.coordinator.get_data_point_address(capability_entity)
+        if mask_address is not None and not self.coordinator.is_register_available(
+            mask_address
+        ):
+            return True
+
+        mask_value = self.coordinator.data.get(capability_entity)
+        try:
+            mask = int(mask_value)
+        except (ValueError, TypeError):
+            return True
+
+        return bool(mask & (1 << capability_bit))
+
     def _get_raw_value(self, default: Any = None) -> Any:
         """Get raw value from coordinator data.
 

@@ -208,3 +208,6 @@ __marimo__/
 
 # Release script
 release.sh
+
+# SIPA generated output
+AnkOutput/
