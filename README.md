@@ -4,7 +4,7 @@
 [![GitHub Release](https://img.shields.io/github/release/anker-charging/ha-anker-solix-official.svg)](https://github.com/anker-charging/ha-anker-solix-official/releases)
 [![License](https://img.shields.io/github/license/anker-charging/ha-anker-solix-official.svg)](LICENSE)
 
-The **official** Home Assistant integration for [Anker Solix](https://www.anker.com/solix) devices, developed and maintained by Anker Innovations.
+The **official** Home Assistant integration for [Anker Solix](https://www.ankersolix.com/eu) devices, developed and maintained by Anker Innovations.
 
 This integration connects to your Anker Solix devices **locally** via Modbus TCP on your home network. All communication stays on your LAN — no cloud servers, no API keys, no internet dependency.
 
