@@ -7,10 +7,19 @@
         "data": {
           "ip_address": "IP地址"
         }
+      },
+      "reconfigure": {
+        "title": "重新配置 Anker Solix",
+        "description": "更新 {device_name} 的连接设置。保存后将自动重新连接。",
+        "data": {
+          "ip_address": "IP地址",
+          "port": "端口"
+        }
       }
     },
     "abort": {
-      "already_configured": "该IP地址已经配置过了"
+      "already_configured": "该IP地址已经配置过了",
+      "reconfigure_successful": "重新配置成功，正在重新连接..."
     },
     "error": {
       "unknown": "未知错误",

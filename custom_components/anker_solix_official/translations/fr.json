@@ -7,10 +7,19 @@
         "data": {
           "ip_address": "Adresse IP"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigurer Anker Solix",
+        "description": "Mettre à jour les paramètres de connexion pour {device_name}. L'intégration se reconnectera après l'enregistrement.",
+        "data": {
+          "ip_address": "Adresse IP",
+          "port": "Port"
+        }
       }
     },
     "abort": {
-      "already_configured": "Cette adresse IP est déjà configurée"
+      "already_configured": "Cette adresse IP est déjà configurée",
+      "reconfigure_successful": "Reconfiguration réussie. L'intégration se reconnecte..."
     },
     "error": {
       "unknown": "Une erreur inconnue s'est produite",

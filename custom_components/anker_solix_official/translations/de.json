@@ -7,10 +7,19 @@
         "data": {
           "ip_address": "IP-Adresse"
         }
+      },
+      "reconfigure": {
+        "title": "Anker Solix neu konfigurieren",
+        "description": "Verbindungseinstellungen für {device_name} aktualisieren. Die Integration wird nach dem Speichern neu verbunden.",
+        "data": {
+          "ip_address": "IP-Adresse",
+          "port": "Port"
+        }
       }
     },
     "abort": {
-      "already_configured": "Diese IP-Adresse ist bereits konfiguriert"
+      "already_configured": "Diese IP-Adresse ist bereits konfiguriert",
+      "reconfigure_successful": "Neukonfiguration erfolgreich. Die Integration wird neu verbunden..."
     },
     "error": {
       "unknown": "Unbekannter Fehler aufgetreten",
