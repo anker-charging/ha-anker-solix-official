@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, WRITE_CONDITION_REVERT_DELAY
@@ -258,10 +259,21 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
             _LOGGER.warning("Cannot show soft warning: hass not available")
             return
 
-        message = self.hass.data.get("translations", {}).get(
-            f"component.{DOMAIN}.exceptions.{warning_key}.message",
-            warning_key,
-        )
+        # hass.data has no built-in "translations" key; the official way to
+        # resolve a translated exceptions.*.message string at runtime is via
+        # the translation helper, using the user's configured language.
+        language = self.hass.config.language
+        localize_key = f"component.{DOMAIN}.exceptions.{warning_key}.message"
+        try:
+            translations = await async_get_translations(
+                self.hass, language, "exceptions", {DOMAIN}
+            )
+        except Exception as err:
+            _LOGGER.debug(
+                "Failed to load translations for soft warning %s: %s", warning_key, err
+            )
+            translations = {}
+        message = translations.get(localize_key, warning_key)
 
         if placeholders:
             for key, value in placeholders.items():
@@ -283,6 +295,28 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
             self._entity_key,
             warning_key,
             placeholders,
+        )
+
+    async def _dismiss_soft_warning(self, warning_key: str) -> None:
+        """Dismiss a previously shown soft warning notification, if any.
+
+        Mirrors the notification_id built in _show_soft_warning, so any
+        entity/rule combination using that method to create a warning can
+        reuse this to clear it once the triggering condition no longer
+        holds. Safe to call unconditionally: dismissing a notification_id
+        that was never created (or already dismissed) is a silent no-op.
+
+        Args:
+            warning_key: Same key used when the warning was created.
+        """
+        if not self.hass:
+            return
+
+        notification_id = f"{DOMAIN}_{warning_key}_{self._entity_key}"
+        await self.hass.services.async_call(
+            "persistent_notification",
+            "dismiss",
+            {"notification_id": notification_id},
         )
 
 

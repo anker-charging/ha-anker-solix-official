@@ -63,7 +63,7 @@
       "message": "Cette fonctionnalité nécessite d'activer l'interrupteur de réserve de secours dans les paramètres de l'application Anker."
     },
     "power_below_optimal_range": {
-      "message": "La consigne de puissance {value}W est inférieure à la plage de fonctionnement optimale ({warning_min}-{warning_max}W). La précision du contrôle peut être réduite."
+      "message": "La puissance saisie de {value}W est inférieure à la plage de fonctionnement optimale. La précision du contrôle peut être affectée."
     }
   },
   "entity": {

@@ -63,7 +63,7 @@
       "message": "This feature requires enabling the Backup Reserve switch in the Anker app under Settings."
     },
     "power_below_optimal_range": {
-      "message": "Power setpoint {value}W is below the optimal operating range ({warning_min}-{warning_max}W). Control accuracy may be reduced."
+      "message": "The input power of {value}W is below the optimal operating range. Control accuracy may deviate."
     }
   },
   "entity": {

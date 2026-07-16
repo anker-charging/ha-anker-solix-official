@@ -63,7 +63,7 @@
       "message": "Diese Funktion erfordert das Aktivieren des Backup-Reserve-Schalters in den Einstellungen der Anker-App."
     },
     "power_below_optimal_range": {
-      "message": "Leistungssollwert {value}W liegt unter dem optimalen Betriebsbereich ({warning_min}-{warning_max}W). Die Regelgenauigkeit kann beeinträchtigt sein."
+      "message": "Die eingegebene Leistung von {value}W liegt unter dem optimalen Betriebsbereich. Die Regelgenauigkeit kann davon abweichen."
     }
   },
   "entity": {

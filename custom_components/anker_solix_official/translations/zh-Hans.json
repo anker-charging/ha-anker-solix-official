@@ -63,7 +63,7 @@
       "message": "此功能需要在 Anker APP 的设置中启用备电保留开关。"
     },
     "power_below_optimal_range": {
-      "message": "功率设定值 {value}W 低于最佳工作范围（{warning_min}-{warning_max}W），控制精度可能会降低。"
+      "message": "您输入的功率为 {value}W，低于最佳工作范围，控制精准度可能发生偏差。"
     }
   },
   "entity": {

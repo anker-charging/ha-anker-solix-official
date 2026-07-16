@@ -63,7 +63,7 @@
       "message": "Deze functie vereist het inschakelen van de back-upreserveschakelaar in de instellingen van de Anker-app."
     },
     "power_below_optimal_range": {
-      "message": "Vermogenssetpoint {value}W ligt onder het optimale werkbereik ({warning_min}-{warning_max}W). De regelnauwkeurigheid kan verminderd zijn."
+      "message": "Het ingevoerde vermogen van {value}W ligt onder het optimale werkbereik. De regelnauwkeurigheid kan hierdoor afwijken."
     }
   },
   "entity": {
