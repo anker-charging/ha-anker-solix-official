@@ -7,10 +7,19 @@
         "data": {
           "ip_address": "IP Address"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Anker Solix",
+        "description": "Update the connection settings for {device_name}. The integration will reconnect after saving.",
+        "data": {
+          "ip_address": "IP Address",
+          "port": "Port"
+        }
       }
     },
     "abort": {
-      "already_configured": "This IP address is already configured"
+      "already_configured": "This IP address is already configured",
+      "reconfigure_successful": "Reconfiguration successful. The integration is reconnecting..."
     },
     "error": {
       "unknown": "Unknown error occurred",
@@ -57,7 +66,7 @@
       "message": "Power cannot be set in the {forbidden_min}-{forbidden_max}W range. Please set 0W or {allowed_min}-{allowed_max}W."
     },
     "power_below_optimal_range": {
-      "message": "Power setpoint {value}W is below the optimal operating range ({warning_min}-{warning_max}W). Control accuracy may be reduced."
+      "message": "The input power of {value}W is below the optimal operating range. Control accuracy may deviate."
     }
   },
   "entity": {

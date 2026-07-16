@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import Any
+
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -261,6 +263,62 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "port": port,
                 "device_name": import_data.get(
                     "device_name", f"Anker Solix Device {ip_address}"
+                ),
+            },
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration."""
+        errors: dict[str, str] = {}
+        reconfigure_entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            new_ip = user_input.get("ip_address", "").strip()
+            new_port = user_input.get("port", 502)
+
+            if not new_ip or not self._validate_ipv4(new_ip):
+                errors["base"] = ERROR_INVALID_IP
+            else:
+                if not await self._test_modbus_connection(new_ip, new_port):
+                    errors["base"] = ERROR_CANNOT_CONNECT
+                else:
+                    supported, sn = await self._check_device_support(new_ip, new_port)
+                    if not supported:
+                        errors["base"] = ERROR_DEVICE_NOT_SUPPORTED
+                    else:
+                        new_data = {
+                            **reconfigure_entry.data,
+                            "ip_address": new_ip,
+                            "port": new_port,
+                        }
+                        self.hass.config_entries.async_update_entry(
+                            reconfigure_entry, data=new_data
+                        )
+                        self.hass.config_entries.async_schedule_reload(
+                            reconfigure_entry.entry_id
+                        )
+                        return self.async_abort(reason="reconfigure_successful")
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "ip_address",
+                        default=reconfigure_entry.data.get("ip_address", ""),
+                    ): str,
+                    vol.Required(
+                        "port",
+                        default=reconfigure_entry.data.get("port", 502),
+                    ): int,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "device_name": reconfigure_entry.data.get(
+                    "device_name", "Anker Solix Device"
                 ),
             },
         )

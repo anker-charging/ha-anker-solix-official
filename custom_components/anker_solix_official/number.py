@@ -456,9 +456,14 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
     def _validate_value_constraints(self, value: float) -> None:
         """Validate value against configured constraints.
 
-        Supports multiple rule types:
-        - forbidden_range: Blocks operation with error if value in range
-        - warning_range: Shows soft warning but allows operation if value in range
+        从 YAML 配置中读取 value_constraints.rules，逐条检查。
+        当前支持的规则类型：
+          - forbidden_range: 禁止某个数值范围 [min, max]（含边界），命中时阻断写入
+          - warning_range: 数值范围 [min, max]（含边界），命中时不阻断写入，仅弹出非阻塞警告通知；
+            值离开该范围时自动 dismiss 对应通知，无需额外代码即可复用于任何 number 字段
+
+        未来可扩展：must_be_multiple_of / forbidden_values / allowed_ranges / condition 等，
+        只需在此方法中增加对应的 _check_xxx 分支即可，无需修改业务代码。
         """
         constraints = self._config.get("value_constraints")
         if not constraints:
@@ -500,6 +505,10 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                                     "value": str(int(value)),
                                 },
                             )
+                        )
+                    else:
+                        self.hass.async_create_task(
+                            self._dismiss_soft_warning(warning_key=error_key)
                         )
             else:
                 _LOGGER.debug(

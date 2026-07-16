@@ -189,7 +189,7 @@ class ModbusConnectionManager:
             self._logger.warning(
                 "Unable to get client connection, failed to read register %d", address
             )
-            return 0
+            return None
 
         try:
             loop = asyncio.get_event_loop()
@@ -202,7 +202,7 @@ class ModbusConnectionManager:
             self._logger.error(
                 "Failed to read register %d: %s", address, e, exc_info=True
             )
-            return 0
+            return None
 
     async def read_device_pn(self) -> tuple[str, str, str]:
         """Read device PN from register 0x8000 (32768) and return MD5 hash with raw data.

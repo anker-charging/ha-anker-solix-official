@@ -7,10 +7,19 @@
         "data": {
           "ip_address": "IP地址"
         }
+      },
+      "reconfigure": {
+        "title": "重新配置 Anker Solix",
+        "description": "更新 {device_name} 的连接设置。保存后将自动重新连接。",
+        "data": {
+          "ip_address": "IP地址",
+          "port": "端口"
+        }
       }
     },
     "abort": {
-      "already_configured": "该IP地址已经配置过了"
+      "already_configured": "该IP地址已经配置过了",
+      "reconfigure_successful": "重新配置成功，正在重新连接..."
     },
     "error": {
       "unknown": "未知错误",
@@ -57,7 +66,7 @@
       "message": "功率不允许设置在 {forbidden_min}-{forbidden_max}W 范围内，请设置 0W 或 {allowed_min}-{allowed_max}W。"
     },
     "power_below_optimal_range": {
-      "message": "功率设定值 {value}W 低于最佳工作范围（{warning_min}-{warning_max}W），控制精度可能会降低。"
+      "message": "您输入的功率为 {value}W，低于最佳工作范围，控制精准度可能发生偏差。"
     }
   },
   "entity": {
