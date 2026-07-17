@@ -258,12 +258,15 @@ read_quantities:
     value_mapping:
       0: "disabled"
       1: "enabled"
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 3
     internal: true
 
-  # =======================================================================
   # Parallel machine capability negotiation register
-  # BIT0: Parallel SOC controls supported (charging limit / discharge limit / backup reserve)
-  # =======================================================================
+  # BIT0: charging_limit_soc supported
+  # BIT1: discharge_limit_soc supported
+  # BIT2: backup_reserve_soc supported
+  # BIT3: backup_soc_enable supported
   parallel_capability_mask:
     address: 0x8007
     data_type: "UINT16"
@@ -401,7 +404,7 @@ control_items:
     max_value: 20
     step: 1
     capability_entity: "parallel_capability_mask"
-    capability_bit: 0
+    capability_bit: 1
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -422,7 +425,7 @@ control_items:
     max_value: 100
     step: 1
     capability_entity: "parallel_capability_mask"
-    capability_bit: 0
+    capability_bit: 2
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
