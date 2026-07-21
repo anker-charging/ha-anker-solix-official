@@ -252,7 +252,7 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
                 blocking=False,
             )
 
-            _LOGGER.info("📝 %s %s → %s", device_name, entity_name, display_option)
+            _LOGGER.debug("📝 %s %s → %s", device_name, entity_name, display_option)
 
             # Auto-rewrite power register with new direction sign
             # Find the power entity that uses this direction selector

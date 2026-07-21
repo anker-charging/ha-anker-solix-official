@@ -645,14 +645,14 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
             # Apply sign based on direction
             if direction == "charge":
                 write_value = -abs(write_value)
-                _LOGGER.info(
+                _LOGGER.debug(
                     "🔋 Direction: charge (user selected), applying NEGATIVE sign: %s -> %s",
                     value,
                     write_value,
                 )
             else:
                 write_value = abs(write_value)
-                _LOGGER.info(
+                _LOGGER.debug(
                     "🔋 Direction: discharge (user selected), keeping POSITIVE: %s -> %s",
                     value,
                     write_value,
@@ -672,7 +672,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
         dlog = self.coordinator.device_logger
 
-        dlog.info(
+        dlog.debug(
             "Writing number %s | address=%d (0x%04X), user_value=%s, raw_value=%s, data_type=%s, gain=%s",
             self._entity_key,
             address,
@@ -700,7 +700,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                 if never_read:
                     # For never-read entities: store in user_selections (permanent)
                     self.coordinator.set_user_selection(self._entity_key, user_value)
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "[never_read_device] %s: stored user_selection=%s (will persist until HA restart)",
                         self._entity_key,
                         user_value,
@@ -764,7 +764,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
                 self.async_write_ha_state()
 
-                dlog.info(warning_log)
+                dlog.debug(warning_log)
             else:
                 dlog.error(
                     "Write number FAILED | entity=%s, user_value=%s, raw_value=%s, address=%d (0x%04X), "
