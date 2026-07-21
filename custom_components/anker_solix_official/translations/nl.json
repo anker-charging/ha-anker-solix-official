@@ -7,10 +7,19 @@
         "data": {
           "ip_address": "IP-adres"
         }
+      },
+      "reconfigure": {
+        "title": "Anker Solix herconfigureren",
+        "description": "Werk de verbindingsinstellingen bij voor {device_name}. De integratie zal na het opslaan opnieuw verbinding maken.",
+        "data": {
+          "ip_address": "IP-adres",
+          "port": "Poort"
+        }
       }
     },
     "abort": {
-      "already_configured": "Dit IP-adres is al geconfigureerd"
+      "already_configured": "Dit IP-adres is al geconfigureerd",
+      "reconfigure_successful": "Herconfiguratie succesvol. De integratie maakt opnieuw verbinding..."
     },
     "error": {
       "unknown": "Er is een onbekende fout opgetreden",
@@ -53,8 +62,8 @@
     "enable_backup_soc_first": {
       "message": "Deze functie vereist het inschakelen van de back-upreserveschakelaar in de instellingen van de Anker-app."
     },
-    "power_range_1_to_99_not_allowed": {
-      "message": "Vermogen kan niet worden ingesteld in het bereik van {forbidden_min}-{forbidden_max}W. Stel 0W of {allowed_min}-{allowed_max}W in."
+    "power_below_optimal_range": {
+      "message": "Het ingevoerde vermogen van {value}W ligt onder het optimale werkbereik. De regelnauwkeurigheid kan hierdoor afwijken."
     }
   },
   "entity": {

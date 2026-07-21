@@ -7,10 +7,19 @@
         "data": {
           "ip_address": "Adresse IP"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigurer Anker Solix",
+        "description": "Mettre à jour les paramètres de connexion pour {device_name}. L'intégration se reconnectera après l'enregistrement.",
+        "data": {
+          "ip_address": "Adresse IP",
+          "port": "Port"
+        }
       }
     },
     "abort": {
-      "already_configured": "Cette adresse IP est déjà configurée"
+      "already_configured": "Cette adresse IP est déjà configurée",
+      "reconfigure_successful": "Reconfiguration réussie. L'intégration se reconnecte..."
     },
     "error": {
       "unknown": "Une erreur inconnue s'est produite",
@@ -53,8 +62,8 @@
     "enable_backup_soc_first": {
       "message": "Cette fonctionnalité nécessite d'activer l'interrupteur de réserve de secours dans les paramètres de l'application Anker."
     },
-    "power_range_1_to_99_not_allowed": {
-      "message": "La puissance ne peut pas être réglée dans la plage de {forbidden_min}-{forbidden_max}W. Veuillez régler 0W ou {allowed_min}-{allowed_max}W."
+    "power_below_optimal_range": {
+      "message": "La puissance saisie de {value}W est inférieure à la plage de fonctionnement optimale. La précision du contrôle peut être affectée."
     }
   },
   "entity": {

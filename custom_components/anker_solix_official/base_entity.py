@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, WRITE_CONDITION_REVERT_DELAY
@@ -238,6 +239,84 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
         raise ServiceValidationError(
             translation_domain=DOMAIN,
             translation_key=hint_key or "write_condition_not_met",
+        )
+
+    async def _show_soft_warning(
+        self,
+        warning_key: str,
+        placeholders: dict[str, str] | None = None,
+    ) -> None:
+        """Show a non-blocking warning notification.
+
+        Uses persistent_notification to display a warning in the Notifications
+        panel (bell icon in sidebar). Does not block the operation.
+
+        Args:
+            warning_key: Translation key for the warning message.
+            placeholders: Optional dict of placeholder values for the message.
+        """
+        if not self.hass:
+            _LOGGER.warning("Cannot show soft warning: hass not available")
+            return
+
+        # hass.data has no built-in "translations" key; the official way to
+        # resolve a translated exceptions.*.message string at runtime is via
+        # the translation helper, using the user's configured language.
+        language = self.hass.config.language
+        localize_key = f"component.{DOMAIN}.exceptions.{warning_key}.message"
+        try:
+            translations = await async_get_translations(
+                self.hass, language, "exceptions", {DOMAIN}
+            )
+        except Exception as err:
+            _LOGGER.debug(
+                "Failed to load translations for soft warning %s: %s", warning_key, err
+            )
+            translations = {}
+        message = translations.get(localize_key, warning_key)
+
+        if placeholders:
+            for key, value in placeholders.items():
+                message = message.replace(f"{{{key}}}", str(value))
+
+        notification_id = f"{DOMAIN}_{warning_key}_{self._entity_key}"
+        await self.hass.services.async_call(
+            "persistent_notification",
+            "create",
+            {
+                "message": message,
+                "title": "Anker SOLIX Warning",
+                "notification_id": notification_id,
+            },
+        )
+
+        _LOGGER.info(
+            "Soft warning shown for %s: %s (placeholders: %s)",
+            self._entity_key,
+            warning_key,
+            placeholders,
+        )
+
+    async def _dismiss_soft_warning(self, warning_key: str) -> None:
+        """Dismiss a previously shown soft warning notification, if any.
+
+        Mirrors the notification_id built in _show_soft_warning, so any
+        entity/rule combination using that method to create a warning can
+        reuse this to clear it once the triggering condition no longer
+        holds. Safe to call unconditionally: dismissing a notification_id
+        that was never created (or already dismissed) is a silent no-op.
+
+        Args:
+            warning_key: Same key used when the warning was created.
+        """
+        if not self.hass:
+            return
+
+        notification_id = f"{DOMAIN}_{warning_key}_{self._entity_key}"
+        await self.hass.services.async_call(
+            "persistent_notification",
+            "dismiss",
+            {"notification_id": notification_id},
         )
 
 

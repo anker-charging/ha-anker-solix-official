@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import Any
+
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -38,11 +40,10 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Test Modbus connection to the device."""
         import asyncio
 
+        loop = asyncio.get_event_loop()
         client = None
         try:
             client = AnkerSolixModbusClient(ip_address, port)
-            # Run blocking connect() in executor to avoid blocking event loop
-            loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, client.connect)
         except Exception as e:
             _LOGGER.warning(
@@ -50,22 +51,21 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             return False
         finally:
-            # Ensure client is properly closed
             try:
                 if client:
-                    client.disconnect()
+                    await loop.run_in_executor(None, client.disconnect)
             except Exception as e:
                 _LOGGER.debug("Error disconnecting during connection test: %s", e)
 
     async def _check_device_support(self, ip_address: str, port: int = 502) -> tuple[bool, str]:
         import asyncio
 
+        loop = asyncio.get_event_loop()
         client = None
         try:
             client = AnkerSolixModbusClient(ip_address, port)
 
             # Run blocking connect() in executor to avoid blocking event loop
-            loop = asyncio.get_event_loop()
             connected = await loop.run_in_executor(None, client.connect)
             if not connected:
                 _LOGGER.warning(
@@ -80,35 +80,40 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             pn_hash, raw_pn, raw_hex = result
             if not pn_hash:
                 _LOGGER.warning(
-                    "Failed to read device PN from %s:%d - Raw: '%s', Registers: [%s]",
+                    "Failed to read device PN from %s:%d - Registers: [%s]",
                     ip_address,
                     port,
-                    raw_pn,
                     raw_hex,
                 )
                 return False, ""
 
             _LOGGER.info(
-                "Device PN read at %s:%d - Raw PN: '%s', MD5: '%s', Registers: [%s]",
+                "Device PN read at %s:%d - hash: '%s', Registers: [%s]",
                 ip_address,
                 port,
-                raw_pn,
                 pn_hash,
                 raw_hex,
             )
 
-            # Check if configuration file exists (file I/O is quick, no need for executor)
             from pathlib import Path
+            import yaml as _yaml
 
             config_file = f"config/{pn_hash}.yaml"
             config_path = Path(__file__).resolve().parent / config_file
 
-            if not config_path.exists():
+            def _check_and_load_config():
+                if not config_path.exists():
+                    return None
+                with open(config_path, encoding="utf-8") as f:
+                    return _yaml.safe_load(f)
+
+            device_cfg = await loop.run_in_executor(None, _check_and_load_config)
+
+            if device_cfg is None:
                 _LOGGER.warning(
-                    "Device PN '%s' (Raw: '%s') detected at %s:%d, but config file not found at %s. "
-                    "Raw registers: [%s]",
+                    "Device PN hash '%s' detected at %s:%d, but config file not found at %s. "
+                    "Registers: [%s]",
                     pn_hash,
-                    raw_pn,
                     ip_address,
                     port,
                     config_path,
@@ -117,19 +122,14 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return False, ""
 
             _LOGGER.info(
-                "Device PN '%s' (Raw: '%s') detected at %s:%d, config file found",
+                "Device PN hash '%s' detected at %s:%d, config file found",
                 pn_hash,
-                raw_pn,
                 ip_address,
                 port,
             )
 
             sn = ""
             try:
-                import yaml as _yaml
-
-                with open(config_path, encoding="utf-8") as f:
-                    device_cfg = _yaml.safe_load(f)
                 sn_key = device_cfg.get("product_info", {}).get("sn_register_key")
                 if sn_key:
                     sn_cfg = device_cfg.get("read_quantities", {}).get(sn_key, {})
@@ -155,13 +155,13 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 sn[:6] + "***" if len(sn) > 6 else "***",
                             )
                         else:
-                            _LOGGER.warning(
+                            _LOGGER.info(
                                 "Failed to read SN from %s:%d, will use IP as unique_id",
                                 ip_address,
                                 port,
                             )
             except Exception as e:
-                _LOGGER.warning(
+                _LOGGER.info(
                     "Exception reading SN from %s:%d: %s, will use IP as unique_id",
                     ip_address,
                     port,
@@ -180,10 +180,9 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             return False, ""
         finally:
-            # Ensure client is properly closed
             try:
                 if client:
-                    client.disconnect()
+                    await loop.run_in_executor(None, client.disconnect)
             except Exception as e:
                 _LOGGER.debug("Error disconnecting during device check: %s", e)
 
@@ -264,6 +263,62 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "port": port,
                 "device_name": import_data.get(
                     "device_name", f"Anker Solix Device {ip_address}"
+                ),
+            },
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration."""
+        errors: dict[str, str] = {}
+        reconfigure_entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            new_ip = user_input.get("ip_address", "").strip()
+            new_port = user_input.get("port", 502)
+
+            if not new_ip or not self._validate_ipv4(new_ip):
+                errors["base"] = ERROR_INVALID_IP
+            else:
+                if not await self._test_modbus_connection(new_ip, new_port):
+                    errors["base"] = ERROR_CANNOT_CONNECT
+                else:
+                    supported, sn = await self._check_device_support(new_ip, new_port)
+                    if not supported:
+                        errors["base"] = ERROR_DEVICE_NOT_SUPPORTED
+                    else:
+                        new_data = {
+                            **reconfigure_entry.data,
+                            "ip_address": new_ip,
+                            "port": new_port,
+                        }
+                        self.hass.config_entries.async_update_entry(
+                            reconfigure_entry, data=new_data
+                        )
+                        self.hass.config_entries.async_schedule_reload(
+                            reconfigure_entry.entry_id
+                        )
+                        return self.async_abort(reason="reconfigure_successful")
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "ip_address",
+                        default=reconfigure_entry.data.get("ip_address", ""),
+                    ): str,
+                    vol.Required(
+                        "port",
+                        default=reconfigure_entry.data.get("port", 502),
+                    ): int,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "device_name": reconfigure_entry.data.get(
+                    "device_name", "Anker Solix Device"
                 ),
             },
         )

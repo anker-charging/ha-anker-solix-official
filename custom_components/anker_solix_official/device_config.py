@@ -34,21 +34,21 @@ class AnkerSolixDeviceConfig:
             if not Path(config_file).is_absolute():
                 config_file = str(self.devices_dir.parent / config_file)
 
-            if not Path(config_file).exists():
-                _LOGGER.warning("Device configuration file does not exist: %s", config_file)
-                return None
-
-            # Load file content asynchronously using executor
             import asyncio
-            import concurrent.futures
-            
+
             def _load_file():
-                with Path(config_file).open(encoding='utf-8') as file:
+                p = Path(config_file)
+                if not p.exists():
+                    return None
+                with p.open(encoding='utf-8') as file:
                     return yaml.safe_load(file)
-            
-            # Run file operation in executor to avoid blocking
+
             loop = asyncio.get_event_loop()
             device_config = await loop.run_in_executor(None, _load_file)
+
+            if device_config is None:
+                _LOGGER.warning("Device configuration file does not exist: %s", config_file)
+                return None
             self._device_configs[config_file] = device_config
 
             _LOGGER.info("Successfully loaded device configuration file: %s", config_file)

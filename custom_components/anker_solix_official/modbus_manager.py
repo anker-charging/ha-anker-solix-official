@@ -80,9 +80,11 @@ class ModbusConnectionManager:
             # Transition to CONNECTING state
             await self._state_machine.transition_to(ConnectionState.CONNECTING)
 
+            loop = asyncio.get_event_loop()
+
             if self._client:
                 self._logger.debug("Closing old connection")
-                self._client.disconnect()
+                await loop.run_in_executor(None, self._client.disconnect)
 
             self._logger.debug(
                 "Creating new Modbus connection: %s (%s:%d)",
@@ -94,12 +96,10 @@ class ModbusConnectionManager:
                 self._ip_address, self._port, self._device_name
             )
 
-            # Connect synchronously in async environment
-            loop = asyncio.get_event_loop()
             success = await loop.run_in_executor(None, self._client.connect)
 
             if success:
-                self._logger.info(
+                self._logger.debug(
                     "Modbus connection created successfully: %s:%d",
                     self._ip_address,
                     self._port,
@@ -163,9 +163,11 @@ class ModbusConnectionManager:
                                 "Connection timeout, closing Modbus connection"
                             )
                             try:
-                                self._client.disconnect()
+                                await asyncio.get_event_loop().run_in_executor(
+                                    None, self._client.disconnect
+                                )
                             except Exception as disconnect_error:
-                                self._logger.warning(
+                                self._logger.info(
                                     "Exception occurred while closing connection: %s",
                                     disconnect_error,
                                 )
@@ -187,7 +189,7 @@ class ModbusConnectionManager:
             self._logger.warning(
                 "Unable to get client connection, failed to read register %d", address
             )
-            return 0
+            return None
 
         try:
             loop = asyncio.get_event_loop()
@@ -200,7 +202,7 @@ class ModbusConnectionManager:
             self._logger.error(
                 "Failed to read register %d: %s", address, e, exc_info=True
             )
-            return 0
+            return None
 
     async def read_device_pn(self) -> tuple[str, str, str]:
         """Read device PN from register 0x8000 (32768) and return MD5 hash with raw data.
@@ -244,7 +246,7 @@ class ModbusConnectionManager:
         if not self._operation_lock:
             self._operation_lock = asyncio.Lock()
 
-        self._logger.warning(
+        self._logger.debug(
             "Write register request | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, timeout=%.1fs, waiting_for_lock=%s",
             self._device_name,
             self._ip_address,
@@ -258,7 +260,7 @@ class ModbusConnectionManager:
         )
 
         async with self._operation_lock:
-            self._logger.info(
+            self._logger.debug(
                 "Write register acquired lock, reconnecting for clean state..."
             )
 
@@ -266,7 +268,9 @@ class ModbusConnectionManager:
             # This is critical because long-lived connections may have stale data
             try:
                 if self._client:
-                    self._client.disconnect()
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, self._client.disconnect
+                    )
                     self._client = None
                 # Reset state machine to allow proper transition
                 self._state_machine.reset()
@@ -301,7 +305,7 @@ class ModbusConnectionManager:
                 self._last_activity = time.time()
 
                 if result.success:
-                    self._logger.warning(
+                    self._logger.debug(
                         "Write register completed | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, result=SUCCESS",
                         self._device_name,
                         self._ip_address,
@@ -312,7 +316,7 @@ class ModbusConnectionManager:
                         data_type,
                     )
                 else:
-                    self._logger.warning(
+                    self._logger.error(
                         "Write register completed | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, result=FAILED, reason=%s",
                         self._device_name,
                         self._ip_address,
@@ -342,7 +346,7 @@ class ModbusConnectionManager:
             except Exception as e:
                 error_str = str(e)
                 if "No response received" in error_str:
-                    self._logger.warning(
+                    self._logger.debug(
                         "Write register SUCCESS (pymodbus format issue) | [%s] address=%d (0x%04X), value=%s, data_type=%s",
                         self._device_name,
                         address,
@@ -433,7 +437,9 @@ class ModbusConnectionManager:
             if self._client:
                 self._logger.info("Disconnecting Modbus connection")
                 try:
-                    self._client.disconnect()
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, self._client.disconnect
+                    )
                 except Exception as e:
                     self._logger.warning(
                         "Exception occurred while disconnecting: %s", e
@@ -483,7 +489,7 @@ class ModbusConnectionManager:
             base_info.update(client_info)
             return base_info
         except Exception as e:
-            self._logger.warning("Failed to get client connection info: %s", e)
+            self._logger.info("Failed to get client connection info: %s", e)
             base_info["connected"] = False
             base_info["error"] = str(e)
             return base_info

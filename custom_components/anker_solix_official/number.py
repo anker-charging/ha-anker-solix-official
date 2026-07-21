@@ -455,7 +455,9 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
         从 YAML 配置中读取 value_constraints.rules，逐条检查。
         当前支持的规则类型：
-          - forbidden_range: 禁止某个数值范围 [min, max]（含边界）
+          - forbidden_range: 禁止某个数值范围 [min, max]（含边界），命中时阻断写入
+          - warning_range: 数值范围 [min, max]（含边界），命中时不阻断写入，仅弹出非阻塞警告通知；
+            值离开该范围时自动 dismiss 对应通知，无需额外代码即可复用于任何 number 字段
 
         未来可扩展：must_be_multiple_of / forbidden_values / allowed_ranges / condition 等，
         只需在此方法中增加对应的 _check_xxx 分支即可，无需修改业务代码。
@@ -486,9 +488,28 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                                 "value": str(int(value)),
                             },
                         )
+            elif rule_type == "warning_range":
+                min_val = rule.get("min")
+                max_val = rule.get("max")
+                if min_val is not None and max_val is not None:
+                    if min_val <= value <= max_val:
+                        self.hass.async_create_task(
+                            self._show_soft_warning(
+                                warning_key=error_key,
+                                placeholders={
+                                    "warning_min": str(int(min_val)),
+                                    "warning_max": str(int(max_val)),
+                                    "value": str(int(value)),
+                                },
+                            )
+                        )
+                    else:
+                        self.hass.async_create_task(
+                            self._dismiss_soft_warning(warning_key=error_key)
+                        )
             else:
-                _LOGGER.warning(
-                    "Unknown value_constraint rule type '%s' for entity %s, skipping",
+                _LOGGER.debug(
+                    "Unknown value constraint rule type '%s' for entity %s, skipping",
                     rule_type,
                     self._entity_key,
                 )
@@ -523,7 +544,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
         ):
             direction = self.coordinator.get_user_selection(direction_entity)
             data = self.coordinator.data
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Power capacity check | entity=%s, value=%s, direction=%s, "
                 "has_data=%s, max_charge_entity=%s, max_discharge_entity=%s",
                 self._entity_key,
@@ -537,7 +558,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                 if direction == "charge" and self._max_charge_power_entity:
                     raw = data.get(self._max_charge_power_entity)
                     device_max = abs(int(raw)) if raw is not None else None
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Charge capacity check | raw=%s, device_max=%s, min_value=%s, will_reject=%s",
                         raw,
                         device_max,
@@ -557,7 +578,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                 elif direction == "discharge" and self._max_discharge_power_entity:
                     raw = data.get(self._max_discharge_power_entity)
                     device_max = abs(int(raw)) if raw is not None else None
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Discharge capacity check | raw=%s, device_max=%s, min_value=%s, will_reject=%s",
                         raw,
                         device_max,
@@ -596,10 +617,10 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
             if direction is None:
                 # User has NOT selected direction - REJECT the operation
-                _LOGGER.error(
+                _LOGGER.warning(
                     "Battery charge/discharge direction not set! Please select direction first."
                 )
-                _LOGGER.error(
+                _LOGGER.warning(
                     "Battery direction not set! Please select charge/discharge direction first."
                 )
 
@@ -624,14 +645,14 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
             # Apply sign based on direction
             if direction == "charge":
                 write_value = -abs(write_value)
-                _LOGGER.info(
+                _LOGGER.debug(
                     "🔋 Direction: charge (user selected), applying NEGATIVE sign: %s -> %s",
                     value,
                     write_value,
                 )
             else:
                 write_value = abs(write_value)
-                _LOGGER.info(
+                _LOGGER.debug(
                     "🔋 Direction: discharge (user selected), keeping POSITIVE: %s -> %s",
                     value,
                     write_value,
@@ -651,7 +672,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
         dlog = self.coordinator.device_logger
 
-        dlog.warning(
+        dlog.debug(
             "Writing number %s | address=%d (0x%04X), user_value=%s, raw_value=%s, data_type=%s, gain=%s",
             self._entity_key,
             address,
@@ -679,7 +700,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                 if never_read:
                     # For never-read entities: store in user_selections (permanent)
                     self.coordinator.set_user_selection(self._entity_key, user_value)
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "[never_read_device] %s: stored user_selection=%s (will persist until HA restart)",
                         self._entity_key,
                         user_value,
@@ -743,7 +764,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
                 self.async_write_ha_state()
 
-                dlog.warning(warning_log)
+                dlog.debug(warning_log)
             else:
                 dlog.error(
                     "Write number FAILED | entity=%s, user_value=%s, raw_value=%s, address=%d (0x%04X), "

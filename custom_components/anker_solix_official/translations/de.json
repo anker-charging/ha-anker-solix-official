@@ -7,10 +7,19 @@
         "data": {
           "ip_address": "IP-Adresse"
         }
+      },
+      "reconfigure": {
+        "title": "Anker Solix neu konfigurieren",
+        "description": "Verbindungseinstellungen für {device_name} aktualisieren. Die Integration wird nach dem Speichern neu verbunden.",
+        "data": {
+          "ip_address": "IP-Adresse",
+          "port": "Port"
+        }
       }
     },
     "abort": {
-      "already_configured": "Diese IP-Adresse ist bereits konfiguriert"
+      "already_configured": "Diese IP-Adresse ist bereits konfiguriert",
+      "reconfigure_successful": "Neukonfiguration erfolgreich. Die Integration wird neu verbunden..."
     },
     "error": {
       "unknown": "Unbekannter Fehler aufgetreten",
@@ -53,8 +62,8 @@
     "enable_backup_soc_first": {
       "message": "Diese Funktion erfordert das Aktivieren des Backup-Reserve-Schalters in den Einstellungen der Anker-App."
     },
-    "power_range_1_to_99_not_allowed": {
-      "message": "Die Leistung kann nicht im Bereich von {forbidden_min}-{forbidden_max}W eingestellt werden. Bitte stellen Sie 0W oder {allowed_min}-{allowed_max}W ein."
+    "power_below_optimal_range": {
+      "message": "Die eingegebene Leistung von {value}W liegt unter dem optimalen Betriebsbereich. Die Regelgenauigkeit kann davon abweichen."
     }
   },
   "entity": {

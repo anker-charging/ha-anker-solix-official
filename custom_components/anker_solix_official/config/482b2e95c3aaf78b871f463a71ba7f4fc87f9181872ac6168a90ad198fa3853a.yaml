@@ -163,9 +163,6 @@ read_quantities:
     gain: 1
     count: 2
     icon: "mdi:transmission-tower-export"
-    power_direction_format:
-      positive: "Export"
-      negative: "Import"
 
   pv_total_generation:
     translation_key: "pv_total_generation"
@@ -351,10 +348,10 @@ control_items:
     default_value: 0  # Default value when user hasn't set anything (must >= min_value)
     value_constraints:
       rules:
-        - type: "forbidden_range"
+        - type: "warning_range"
           min: 1
           max: 99
-          error_key: "power_range_1_to_99_not_allowed"
+          error_key: "power_below_optimal_range"
 
   charging_limit_soc:
     translation_key: "charging_limit_soc"
