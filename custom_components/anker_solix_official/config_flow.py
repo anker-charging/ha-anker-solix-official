@@ -210,8 +210,19 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         unique_id = sn if sn else ip_address
                         await self.async_set_unique_id(unique_id)
                         for entry in self._async_current_entries():
-                            if entry.unique_id == unique_id and not entry.disabled_by:
-                                return self.async_abort(reason="already_configured")
+                            if entry.unique_id != unique_id:
+                                continue
+                            if entry.disabled_by is not None:
+                                # Re-enable disabled entries instead of aborting silently.
+                                self.hass.config_entries.async_update_entry(
+                                    entry,
+                                    data={**entry.data, "ip_address": ip_address},
+                                )
+                                await self.hass.config_entries.async_set_disabled_by(
+                                    entry.entry_id, None
+                                )
+                                return self.async_abort(reason="reconfigure_successful")
+                            return self.async_abort(reason="already_configured")
                         self._abort_if_unique_id_configured(updates={"ip_address": ip_address})
                         return self.async_create_entry(
                             title=f"Anker Solix {ip_address}",
@@ -252,8 +263,18 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         unique_id = sn if sn else ip_address
         await self.async_set_unique_id(unique_id)
         for entry in self._async_current_entries():
-            if entry.unique_id == unique_id and not entry.disabled_by:
-                return self.async_abort(reason="already_configured")
+            if entry.unique_id != unique_id:
+                continue
+            if entry.disabled_by is not None:
+                # Re-enable disabled entries instead of aborting silently.
+                self.hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, "ip_address": ip_address}
+                )
+                await self.hass.config_entries.async_set_disabled_by(
+                    entry.entry_id, None
+                )
+                return self.async_abort(reason="reconfigure_successful")
+            return self.async_abort(reason="already_configured")
         self._abort_if_unique_id_configured(updates={"ip_address": ip_address})
 
         return self.async_create_entry(
