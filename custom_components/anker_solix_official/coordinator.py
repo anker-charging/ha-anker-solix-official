@@ -305,7 +305,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                 old_value = data[model_register_key]
                 if old_value != product_name:
                     data[model_register_key] = product_name
-                    self.logger.info(
+                    self.logger.debug(
                         "📝 Overrode %s sensor: %s → %s",
                         model_register_key,
                         old_value,

@@ -60,7 +60,7 @@ class AnkerSolixModbusClient:
         self.device_name = device_name or f"{ip_address}:{port}"
         self.client = self._create_client(ip_address, port)
         self._logger = logging.getLogger(__name__)
-        self._logger.info(
+        self._logger.debug(
             "Using pymodbus version: %s for device %s",
             PYMODBUS_VERSION,
             self.device_name,
@@ -137,7 +137,7 @@ class AnkerSolixModbusClient:
 
             if self.client.connect():
                 self._connection_status = "connected"
-                self._logger.info(
+                self._logger.debug(
                     "Successfully connected to Modbus %s:%d", self.ip_address, self.port
                 )
                 return True
@@ -180,7 +180,7 @@ class AnkerSolixModbusClient:
             if hasattr(self.client, "close"):
                 self.client.close()
             self._connection_status = "disconnected"
-            self._logger.info(
+            self._logger.debug(
                 "Disconnected from Modbus %s:%d", self.ip_address, self.port
             )
         except (OSError, AttributeError) as e:

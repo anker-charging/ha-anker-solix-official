@@ -99,7 +99,7 @@ class ModbusConnectionManager:
             success = await loop.run_in_executor(None, self._client.connect)
 
             if success:
-                self._logger.info(
+                self._logger.debug(
                     "Modbus connection created successfully: %s:%d",
                     self._ip_address,
                     self._port,
@@ -260,7 +260,7 @@ class ModbusConnectionManager:
         )
 
         async with self._operation_lock:
-            self._logger.info(
+            self._logger.debug(
                 "Write register acquired lock, reconnecting for clean state..."
             )
 
