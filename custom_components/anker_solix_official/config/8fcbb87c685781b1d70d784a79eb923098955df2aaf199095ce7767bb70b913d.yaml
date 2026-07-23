@@ -30,7 +30,7 @@ batch_read_ranges:
     - 10000-10050
     - 10090-10156
     - 10208-10265
-    - 32768-32774
+    - 32768-32775
   holding:
     - 10060-10072
     - 10074-10081
@@ -276,7 +276,6 @@ read_quantities:
     count: 1
     icon: "mdi:feature-search"
     internal: true
-    # BIT0: Parallel SOC controls supported (charging limit / discharge limit / backup reserve)
 
 # =======================================================================
 # Write Quantities Configuration (Control Type)
