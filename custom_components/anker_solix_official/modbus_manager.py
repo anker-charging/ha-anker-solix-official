@@ -245,6 +245,8 @@ class ModbusConnectionManager:
         # Use operation lock to prevent concurrent read/write operations
         if not self._operation_lock:
             self._operation_lock = asyncio.Lock()
+        if not self._connection_lock:
+            self._connection_lock = asyncio.Lock()
 
         self._logger.debug(
             "Write register request | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, timeout=%.1fs, waiting_for_lock=%s",
@@ -259,9 +261,9 @@ class ModbusConnectionManager:
             self._operation_lock.locked(),
         )
 
-        async with self._operation_lock:
+        async with self._connection_lock, self._operation_lock:
             self._logger.debug(
-                "Write register acquired lock, reconnecting for clean state..."
+                "Write register acquired locks, reconnecting for clean state..."
             )
 
             # Force reconnect before write to ensure clean TCP state
@@ -272,8 +274,7 @@ class ModbusConnectionManager:
                         None, self._client.disconnect
                     )
                     self._client = None
-                # Reset state machine to allow proper transition
-                self._state_machine.reset()
+                await self._state_machine.reset()
                 await self._create_connection()
             except Exception as e:
                 self._logger.error("Failed to reconnect before write: %s", e)
@@ -413,8 +414,14 @@ class ModbusConnectionManager:
                 self._logger.error("Failed to batch read data: %s", e, exc_info=True)
                 return {}
 
-    def force_disconnect(self) -> None:
-        """Force disconnect without acquiring lock - for error recovery."""
+    async def force_disconnect(self) -> None:
+        """Force disconnect without acquiring the connection lock - for error recovery.
+
+        Also resets the state machine so it stays in sync with the fact
+        that _client is now gone; otherwise the next connect attempt's
+        transition_to(CONNECTING) would be rejected as invalid from a
+        stale CONNECTED state.
+        """
         if self._client:
             self._logger.info("Force disconnecting Modbus connection")
             try:
@@ -423,6 +430,7 @@ class ModbusConnectionManager:
                 self._logger.debug("Exception during force disconnect: %s", e)
             finally:
                 self._client = None
+        await self._state_machine.reset()
 
     async def disconnect(self) -> None:
         """Disconnect and clean up resources"""

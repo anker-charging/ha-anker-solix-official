@@ -600,7 +600,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
         return True
 
-    def _handle_connection_failure(self, error_msg: str):
+    async def _handle_connection_failure(self, error_msg: str):
         """Handle connection failure with HA best-practice logging.
 
         HA Integration Quality Scale rule 'log-when-unavailable':
@@ -620,7 +620,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
         # Force disconnect modbus connection to ensure clean reconnection
         try:
-            self.modbus_manager.force_disconnect()
+            await self.modbus_manager.force_disconnect()
         except Exception as e:
             self.logger.debug("Error during force disconnect: %s", e)
 
@@ -776,9 +776,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                         client = await self.modbus_manager.get_client()
                         connected = client is not None
                     if not connected:
-                        self._handle_connection_failure(
-                            "[bg] modbus_manager.get_client() failed"
-                        )
+                        await self._handle_connection_failure("[bg] modbus_manager.get_client() failed")
                         await asyncio.sleep(self._connection_retry_interval)
                         continue
 
@@ -788,9 +786,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                         await asyncio.sleep(0.7)
                         config_file = await self._get_config_file_path()
                         if not config_file:
-                            self._handle_connection_failure(
-                                "[bg] Failed to determine config file path"
-                            )
+                            await self._handle_connection_failure("[bg] Failed to determine config file path")
                             await asyncio.sleep(self._connection_retry_interval)
                             continue
                         self._selected_config_file = config_file
@@ -808,15 +804,11 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                                 self._batch_ranges_cache = batch_ranges
                                 self._config_cache_valid = True
                             else:
-                                self._handle_connection_failure(
-                                    "[bg] parsed config has no data_points"
-                                )
+                                await self._handle_connection_failure("[bg] parsed config has no data_points")
                                 await asyncio.sleep(self._connection_retry_interval)
                                 continue
                         else:
-                            self._handle_connection_failure(
-                                "[bg] load device config file failed"
-                            )
+                            await self._handle_connection_failure("[bg] load device config file failed")
                             await asyncio.sleep(self._connection_retry_interval)
                             continue
 
@@ -839,9 +831,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                         self.logger.warning(
                             "[bg] initial data fetch returned empty data"
                         )
-                        self._handle_connection_failure(
-                            "[bg] initial data fetch returned empty"
-                        )
+                        await self._handle_connection_failure("[bg] initial data fetch returned empty")
                         await asyncio.sleep(self._connection_retry_interval)
                         continue
 
@@ -932,9 +922,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                         # Reload configuration
                         config_file = await self._get_config_file_path()
                         if not config_file:
-                            self._handle_connection_failure(
-                                "[bg] Failed to determine config file path during reload"
-                            )
+                            await self._handle_connection_failure("[bg] Failed to determine config file path during reload")
                             await asyncio.sleep(self._connection_retry_interval)
                             continue
                         cfg = await self.device_config.load_device_config_by_file_async(
@@ -1005,15 +993,13 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                                 self._consecutive_failures + 1,
                             )
                             if self._consecutive_failures >= 2:
-                                self._handle_connection_failure(
-                                    "[bg] periodic data fetch failed after multiple attempts"
-                                )
+                                await self._handle_connection_failure("[bg] periodic data fetch failed after multiple attempts")
                             else:
                                 self._consecutive_failures += 1
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self._handle_connection_failure(f"[bg] loop exception: {e}")
+                await self._handle_connection_failure(f"[bg] loop exception: {e}")
                 await asyncio.sleep(self._connection_retry_interval)
 
     def _handle_connection_success(self):
