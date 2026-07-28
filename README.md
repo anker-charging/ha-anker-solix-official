@@ -117,6 +117,12 @@ Yes. You can add multiple Anker devices in Home Assistant, each configured and c
   - **Home Assistant**: Daily automation, control, and monitoring
 - Avoid modifying the same parameter on both platforms simultaneously, as this may cause conflicts
 
+**Q: Does the P1 Meter in the Netherlands support Home Assistant?**
+
+A: Since the Anker P1 Meter is designed as a plug-and-play meter reader (no electrician required for installation), it does not support the Modbus protocol. For Home Assistant integration, you can use third-party P1 meters such as the HomeWizard P1 or EcoTracker P1.
+
+For more instructions on using Home Assistant and FAQs, please visit: https://anker-webview-eu.anker.com/home-assistant
+
 ## Data Security
 
 - **Local communication** — All device control and data reading are performed over local LAN connections. No dependency on cloud servers. Data is transmitted directly between your local Home Assistant instance and the device.
