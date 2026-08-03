@@ -62,9 +62,6 @@
     "enable_backup_soc_first": {
       "message": "This feature requires enabling the Backup Reserve switch in the Anker app under Settings."
     },
-    "power_range_1_to_99_not_allowed": {
-      "message": "Power cannot be set in the {forbidden_min}-{forbidden_max}W range. Please set 0W or {allowed_min}-{allowed_max}W."
-    },
     "power_below_optimal_range": {
       "message": "The input power of {value}W is below the optimal operating range. Control accuracy may deviate."
     }
