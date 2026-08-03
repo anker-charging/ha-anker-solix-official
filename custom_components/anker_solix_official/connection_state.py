@@ -36,6 +36,7 @@ class ConnectionStateMachine:
             ConnectionState.CLOSING,
         ],
         ConnectionState.CONNECTED: [
+            ConnectionState.CONNECTING,
             ConnectionState.DISCONNECTED,
             ConnectionState.RECONNECTING,
             ConnectionState.ERROR,

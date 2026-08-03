@@ -256,14 +256,16 @@ class AnkerSolixSwitch(AnkerSolixBaseEntity, SwitchEntity):
 
                 dlog.info("📝 %s %s → %s", device_name, entity_name, state_display)
             else:
-                dlog.error(
+                log_fn = dlog.warning if result.is_transient else dlog.error
+                log_fn(
                     "Write switch FAILED | entity=%s, state='%s', value=%d, address=%d (0x%04X), "
-                    "reason=%s, raw_response=%s, tx_frame=%s",
+                    "is_transient=%s, reason=%s, raw_response=%s, tx_frame=%s",
                     self._entity_key,
                     state_name,
                     value,
                     address,
                     address,
+                    result.is_transient,
                     result.error_reason,
                     result.raw_response or "N/A",
                     result.tx_frame or "N/A",

@@ -7,7 +7,12 @@ from typing import Optional
 
 from .modbus_client import AnkerSolixModbusClient
 from .connection_state import ConnectionState, ConnectionStateMachine
-from .const import CONNECTION_CHECK_INTERVAL, DEFAULT_TIMEOUT
+from .const import (
+    CONNECTION_CHECK_INTERVAL,
+    DEFAULT_TIMEOUT,
+    MODBUS_CONNECT_TIMEOUT,
+    MODBUS_DISCONNECT_TIMEOUT,
+)
 from .device_logger import WriteResult
 
 
@@ -84,7 +89,10 @@ class ModbusConnectionManager:
 
             if self._client:
                 self._logger.debug("Closing old connection")
-                await loop.run_in_executor(None, self._client.disconnect)
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, self._client.disconnect),
+                    timeout=MODBUS_DISCONNECT_TIMEOUT,
+                )
 
             self._logger.debug(
                 "Creating new Modbus connection: %s (%s:%d)",
@@ -96,7 +104,10 @@ class ModbusConnectionManager:
                 self._ip_address, self._port, self._device_name
             )
 
-            success = await loop.run_in_executor(None, self._client.connect)
+            success = await asyncio.wait_for(
+                loop.run_in_executor(None, self._client.connect),
+                timeout=MODBUS_CONNECT_TIMEOUT,
+            )
 
             if success:
                 self._logger.debug(
@@ -137,6 +148,20 @@ class ModbusConnectionManager:
             self._logger.debug("Connection check failed: %s", e)
             return False
 
+    async def _wait_for_connection_ready(self, timeout: float = 5.0) -> bool:
+        """Give the connection loop a short grace period before failing a write.
+
+        Called OUTSIDE _connection_lock/_operation_lock so the wait does not
+        block the coordinator's periodic get_all_data() (issue #83: a write
+        arriving during a transient Wi-Fi drop should not be treated as a
+        hard failure if the connection self-heals within a few seconds).
+        """
+        if self._client and await self._is_connected():
+            return True
+        return await self._state_machine.wait_for_state(
+            ConnectionState.CONNECTED, timeout=timeout
+        )
+
     async def _cleanup_connection(self) -> None:
         """Periodically clean up connections"""
         try:
@@ -173,6 +198,7 @@ class ModbusConnectionManager:
                                 )
                             finally:
                                 self._client = None
+                                await self._state_machine.reset()
 
         except asyncio.CancelledError:
             self._logger.debug("Cleanup task cancelled")
@@ -261,26 +287,39 @@ class ModbusConnectionManager:
             self._operation_lock.locked(),
         )
 
+        # Grace period BEFORE acquiring either lock, so a transient drop
+        # (issue #83) does not delay get_all_data()'s periodic polling,
+        # which also waits on _operation_lock.
+        connection_ready = await self._wait_for_connection_ready(timeout=5.0)
+
         async with self._connection_lock, self._operation_lock:
             self._logger.debug(
-                "Write register acquired locks, reconnecting for clean state..."
+                "Write register acquired locks (connection_ready=%s)", connection_ready
             )
 
-            # Force reconnect before write to ensure clean TCP state
-            # This is critical because long-lived connections may have stale data
-            try:
-                if self._client:
-                    await asyncio.get_event_loop().run_in_executor(
-                        None, self._client.disconnect
+            # Re-check now that the locks are held: something could have
+            # torn down the connection in the gap between the wait above
+            # and acquiring _connection_lock. Only reconnect when actually
+            # needed instead of unconditionally forcing a fresh TCP socket.
+            if not (self._client and await self._is_connected()):
+                try:
+                    if self._client:
+                        await asyncio.wait_for(
+                            asyncio.get_event_loop().run_in_executor(
+                                None, self._client.disconnect
+                            ),
+                            timeout=MODBUS_DISCONNECT_TIMEOUT,
+                        )
+                        self._client = None
+                    await self._state_machine.reset()
+                    await self._create_connection()
+                except Exception as e:
+                    self._logger.error("Failed to reconnect before write: %s", e)
+                    return WriteResult(
+                        success=False,
+                        error_reason=f"Failed to reconnect before write: {e}",
+                        is_transient=True,
                     )
-                    self._client = None
-                await self._state_machine.reset()
-                await self._create_connection()
-            except Exception as e:
-                self._logger.error("Failed to reconnect before write: %s", e)
-                return WriteResult(
-                    success=False, error_reason=f"Failed to reconnect before write: {e}"
-                )
 
             client = self._client
             if not client:
@@ -292,7 +331,9 @@ class ModbusConnectionManager:
                     data_type,
                 )
                 return WriteResult(
-                    success=False, error_reason="Unable to get client connection"
+                    success=False,
+                    error_reason="Unable to get client connection",
+                    is_transient=True,
                 )
 
             try:
@@ -316,6 +357,18 @@ class ModbusConnectionManager:
                         value,
                         data_type,
                     )
+                elif result.is_transient:
+                    self._logger.warning(
+                        "Write register deferred (connection not ready) | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, reason=%s",
+                        self._device_name,
+                        self._ip_address,
+                        self._port,
+                        address,
+                        address,
+                        value,
+                        data_type,
+                        result.error_reason,
+                    )
                 else:
                     self._logger.error(
                         "Write register completed | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, result=FAILED, reason=%s",
@@ -330,7 +383,7 @@ class ModbusConnectionManager:
                     )
                 return result
             except asyncio.TimeoutError:
-                self._logger.error(
+                self._logger.warning(
                     "Write register TIMEOUT | [%s] device=%s:%d, address=%d (0x%04X), value=%s, data_type=%s, timeout=%.1fs",
                     self._device_name,
                     self._ip_address,
@@ -342,7 +395,9 @@ class ModbusConnectionManager:
                     timeout,
                 )
                 return WriteResult(
-                    success=False, error_reason=f"Connection timeout ({timeout}s)"
+                    success=False,
+                    error_reason=f"Connection timeout ({timeout}s)",
+                    is_transient=True,
                 )
             except Exception as e:
                 error_str = str(e)
@@ -415,22 +470,29 @@ class ModbusConnectionManager:
                 return {}
 
     async def force_disconnect(self) -> None:
-        """Force disconnect without acquiring the connection lock - for error recovery.
+        """Force disconnect for error recovery.
 
-        Also resets the state machine so it stays in sync with the fact
-        that _client is now gone; otherwise the next connect attempt's
-        transition_to(CONNECTING) would be rejected as invalid from a
-        stale CONNECTED state.
+        Uses _connection_lock to stay mutually exclusive with
+        _create_connection() and write_register() (issue #72).
         """
-        if self._client:
-            self._logger.info("Force disconnecting Modbus connection")
-            try:
-                self._client.disconnect()
-            except Exception as e:
-                self._logger.debug("Exception during force disconnect: %s", e)
-            finally:
-                self._client = None
-        await self._state_machine.reset()
+        if not self._connection_lock:
+            self._connection_lock = asyncio.Lock()
+
+        async with self._connection_lock:
+            if self._client:
+                self._logger.info("Force disconnecting Modbus connection")
+                try:
+                    await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(
+                            None, self._client.disconnect
+                        ),
+                        timeout=MODBUS_DISCONNECT_TIMEOUT,
+                    )
+                except Exception as e:
+                    self._logger.debug("Exception during force disconnect: %s", e)
+                finally:
+                    self._client = None
+            await self._state_machine.reset()
 
     async def disconnect(self) -> None:
         """Disconnect and clean up resources"""

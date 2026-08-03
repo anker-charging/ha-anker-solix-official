@@ -29,6 +29,11 @@ class WriteResult:
     exception_code: int | None = None
     exception_name: str = ""
     tx_frame: str = ""
+    is_transient: bool = False
+    """True for connection-level failures expected to self-heal (not
+    connected yet, timeout, network exception). False for failures the
+    device itself reported (protocol exceptions, rejected values) which
+    indicate a genuine fault worth surfacing at ERROR level."""
 
     def __bool__(self) -> bool:
         return self.success

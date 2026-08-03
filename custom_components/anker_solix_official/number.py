@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -17,7 +18,7 @@ from homeassistant.helpers.dispatcher import (
 )
 from homeassistant.const import ATTR_ENTITY_ID
 
-from .const import DOMAIN
+from .const import DOMAIN, WRITE_CONDITION_REVERT_DELAY
 from .coordinator import AnkerSolixOfficialCoordinator
 from .base_entity import AnkerSolixBaseEntity, async_setup_entities_with_retry
 
@@ -686,6 +687,15 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
             gain,
         )
 
+        # Captured before the write attempt so a failure can revert the
+        # displayed value to what the UI showed prior to this call, instead
+        # of leaving the user-typed value stuck in the input box (issue #83:
+        # HA's frontend only re-syncs a NumberMode.BOX input when the bound
+        # state string actually changes; if native_value silently stays the
+        # same after a failed write, the box keeps showing the failed input).
+        never_read = self._config.get("never_read_device", False)
+        previous_value = self.native_value
+
         try:
             result = await self.coordinator.modbus_manager.write_register(
                 address,
@@ -699,7 +709,6 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                 user_value = int(value) if gain == 1 else value
 
                 # Check if this is a never-read entity
-                never_read = self._config.get("never_read_device", False)
                 if never_read:
                     # For never-read entities: store in user_selections (permanent)
                     self.coordinator.set_user_selection(self._entity_key, user_value)
@@ -769,20 +778,21 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
                 dlog.debug(warning_log)
             else:
-                dlog.error(
+                log_fn = dlog.warning if result.is_transient else dlog.error
+                log_fn(
                     "Write number FAILED | entity=%s, user_value=%s, raw_value=%s, address=%d (0x%04X), "
-                    "reason=%s, raw_response=%s, tx_frame=%s",
+                    "is_transient=%s, reason=%s, raw_response=%s, tx_frame=%s",
                     self._entity_key,
                     value,
                     write_value,
                     address,
                     address,
+                    result.is_transient,
                     result.error_reason,
                     result.raw_response or "N/A",
                     result.tx_frame or "N/A",
                 )
-                # Only refresh on failure to restore correct state
-                await self.coordinator.async_request_refresh()
+                await self._revert_native_value(previous_value, never_read)
 
         except Exception as e:
             dlog.error(
@@ -794,10 +804,41 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                 address,
                 e,
             )
-            try:
-                await self.coordinator.async_request_refresh()
-            except Exception:
-                pass
+            await self._revert_native_value(previous_value, never_read)
+
+    async def _revert_native_value(
+        self, previous_value: float | int | None, never_read: bool
+    ) -> None:
+        """Revert the displayed value to what it was before a failed write.
+
+        HA's frontend only re-renders a NumberMode.BOX input when the bound
+        state string differs from what it last committed. If the write fails
+        and native_value ends up unchanged, no state change is observed and
+        the box keeps showing the user's failed input forever. Forcing a
+        two-step transition (push the failed value, then push the real one)
+        guarantees a real value change the frontend can react to — same
+        pattern as base_entity._revert_ui_state, adapted here because that
+        helper always clears to the device value, which would drop a
+        never_read_device entity to its configured default (e.g. 0 W)
+        instead of back to the last value the user actually confirmed.
+        """
+        self.async_write_ha_state()
+
+        async def _delayed_revert() -> None:
+            await asyncio.sleep(WRITE_CONDITION_REVERT_DELAY)
+            if not (self.hass and self.entity_id in self.hass.states.async_entity_ids()):
+                return
+            if never_read:
+                if previous_value is not None:
+                    self.coordinator.set_user_selection(self._entity_key, previous_value)
+                else:
+                    self.coordinator.clear_user_selection(self._entity_key)
+            else:
+                self._last_known_value = None
+                self.coordinator.clear_user_selection(self._entity_key)
+            self.async_write_ha_state()
+
+        self.hass.async_create_task(_delayed_revert())
 
     @callback
     def _handle_coordinator_update(self) -> None:
