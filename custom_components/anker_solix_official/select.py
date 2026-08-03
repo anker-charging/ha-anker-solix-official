@@ -337,14 +337,16 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
 
                 dlog.info("📝 %s → %s", entity_name, display_option)
             else:
-                dlog.error(
+                log_fn = dlog.warning if result.is_transient else dlog.error
+                log_fn(
                     "Write select FAILED | entity=%s, option='%s', value=%d, address=%d (0x%04X), "
-                    "reason=%s, raw_response=%s, tx_frame=%s",
+                    "is_transient=%s, reason=%s, raw_response=%s, tx_frame=%s",
                     self._entity_key,
                     option,
                     value,
                     address,
                     address,
+                    result.is_transient,
                     result.error_reason,
                     result.raw_response or "N/A",
                     result.tx_frame or "N/A",

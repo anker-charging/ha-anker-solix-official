@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -158,6 +159,13 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
             self._attr_state_class = SensorStateClass.TOTAL_INCREASING
         elif unit and unit != "/":
             self._attr_state_class = SensorStateClass.MEASUREMENT
+
+        # Derive display precision from gain so UI decimals match register resolution
+        gain = config.get("gain")
+        if isinstance(gain, (int, float)) and gain > 0:
+            precision = round(math.log10(gain))
+            if 10**precision == gain:
+                self._attr_suggested_display_precision = precision
 
     def _get_aggregated_value(self, default: Any = 0) -> Any:
         """Get aggregated value from primary and additional sources.

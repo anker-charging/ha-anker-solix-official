@@ -30,7 +30,7 @@ batch_read_ranges:
     - 10000-10050
     - 10090-10156
     - 10208-10265
-    - 32768-32774
+    - 32768-32775
   holding:
     - 10060-10072
     - 10074-10081
@@ -258,6 +258,23 @@ read_quantities:
     value_mapping:
       0: "disabled"
       1: "enabled"
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 3
+    internal: true
+
+  # Parallel machine capability negotiation register
+  # BIT0: charging_limit_soc supported
+  # BIT1: discharge_limit_soc supported
+  # BIT2: backup_reserve_soc supported
+  # BIT3: backup_soc_enable supported
+  parallel_capability_mask:
+    translation_key: "parallel_capability_mask"
+    address: 0x8007
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    icon: "mdi:feature-search"
     internal: true
 
 # =======================================================================
@@ -366,6 +383,8 @@ control_items:
     min_value: 80
     max_value: 100
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 0
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -386,6 +405,8 @@ control_items:
     min_value: 0
     max_value: 20
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 1
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -405,6 +426,8 @@ control_items:
     min_value: 0
     max_value: 100
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 2
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1

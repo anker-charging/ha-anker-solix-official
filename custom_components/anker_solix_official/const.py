@@ -9,6 +9,10 @@ CONNECTION_RETRY_DELAY = 10
 MODBUS_RESPONSE_TIMEOUT = 5
 COORDINATOR_UPDATE_INTERVAL = 5
 WRITE_CONDITION_REVERT_DELAY = 0.1
+# Executor-call timeouts preventing _connection_lock from being held
+# indefinitely if pymodbus connect()/disconnect() hangs (issue #72).
+MODBUS_CONNECT_TIMEOUT = 15.0
+MODBUS_DISCONNECT_TIMEOUT = 5.0
 
 # Connection constants
 DEFAULT_MODBUS_PORT = 502

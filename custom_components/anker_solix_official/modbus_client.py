@@ -186,17 +186,53 @@ class AnkerSolixModbusClient:
         except (OSError, AttributeError) as e:
             self._logger.error("Error during disconnect: %s", e)
 
-    def _handle_connection_error(self, error_msg: str = ""):
-        """Handle connection error and update error tracking with throttled logging."""
+    def _handle_connection_error(
+        self, error_msg: str = "", exc: BaseException | None = None
+    ):
+        """Handle connection error and update error tracking with throttled logging.
+
+        Args:
+            error_msg: Human-readable description of the error (used for logging
+                and for the legacy string-matching disconnect check).
+            exc: The actual exception instance that triggered this call, if any.
+                Used to decide whether to force-disconnect based on exception
+                *type* rather than relying solely on substring matching in
+                ``error_msg``. ``ModbusIOException``/``ModbusException`` (e.g.
+                transaction ID mismatch) and connection-level errors
+                (``ConnectionException``, ``ConnectionError``, ``OSError``,
+                ``TimeoutError``) always warrant a disconnect: the socket may
+                be holding a stale/desynced TCP state that would otherwise be
+                silently reused on the next call (see issue #81).
+        """
         current_time = time.time()
         self._consecutive_errors += 1
         self._connection_status = "error"
         self._error_count_since_last_log += 1
 
-        # Check if it's a Broken pipe error, if so disconnect immediately
-        if "Broken pipe" in error_msg or "Connection reset" in error_msg:
+        # Decide whether to force-disconnect. Two independent triggers:
+        #   1) Legacy string matching (kept for backward compatibility with
+        #      error paths that don't pass an `exc` instance).
+        #   2) Exception-type matching (issue #81 fix): covers timeouts and
+        #      protocol-level errors such as transaction ID mismatch, which
+        #      never contain "Broken pipe"/"Connection reset" in their
+        #      message and were previously never triggering a disconnect.
+        should_disconnect = "Broken pipe" in error_msg or "Connection reset" in error_msg
+        disconnect_reason = "string-match" if should_disconnect else ""
+
+        if not should_disconnect and exc is not None:
+            connection_level_excs = (ConnectionError, OSError, TimeoutError)
+            if ConnectionException is not None:
+                connection_level_excs = connection_level_excs + (ConnectionException,)
+            if ModbusException is not None:
+                connection_level_excs = connection_level_excs + (ModbusException,)
+            if isinstance(exc, connection_level_excs):
+                should_disconnect = True
+                disconnect_reason = f"exception-type ({type(exc).__name__})"
+
+        if should_disconnect:
             self._logger.debug(
-                "Detected connection disconnection error, disconnecting immediately: %s",
+                "Detected connection error requiring disconnect (%s), disconnecting immediately: %s",
+                disconnect_reason,
                 error_msg,
             )
             self._force_disconnect()
@@ -250,6 +286,56 @@ class AnkerSolixModbusClient:
         except Exception:
             return False
         return False
+
+    def _flush_recv_buffer(self, max_bytes: int = 65536) -> int:
+        """Drain any bytes already sitting in the TCP receive buffer.
+
+        Devices under load may fall behind the polling cadence and leave
+        stale response packets queued on the socket. If left unread, the
+        next request's response gets interleaved with these leftovers,
+        producing transaction ID mismatches (issue #81). This performs a
+        best-effort, non-blocking drain immediately before issuing a new
+        request so pymodbus only has to parse genuinely fresh data.
+
+        Operates directly on the underlying `socket.socket` (bypassing
+        pymodbus's `recv()`, which has its own framing/timeout semantics
+        not suited for a plain drain) so it must tolerate the socket being
+        `None` or already closed.
+
+        Returns the number of bytes discarded (0 if nothing to flush or
+        the socket isn't available).
+        """
+        sock = getattr(self.client, "socket", None)
+        if sock is None:
+            return 0
+
+        discarded = 0
+        try:
+            sock.setblocking(False)
+            while discarded < max_bytes:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    # Peer closed the connection; nothing more to drain.
+                    break
+                discarded += len(chunk)
+        except (BlockingIOError, InterruptedError):
+            # Expected: no more data currently available to read.
+            pass
+        except (OSError, AttributeError, ValueError) as e:
+            # Socket in an unexpected state (closed mid-drain, etc.) - not
+            # fatal, the caller will still attempt its own read/write and
+            # surface any real problem through its own exception handling.
+            self._logger.debug("Exception while flushing recv buffer: %s", e)
+        finally:
+            with contextlib.suppress(Exception):
+                sock.setblocking(True)
+
+        if discarded:
+            self._logger.debug(
+                "Flushed %d stale byte(s) from recv buffer before next request",
+                discarded,
+            )
+        return discarded
 
     def _default_value(self, data_type: str) -> Any:
         """Return default fallback value for a data type."""
@@ -407,10 +493,14 @@ class AnkerSolixModbusClient:
             )
             return self._decode_register_value(address, data_type, registers[:count])
         except _RegisterDecodeError as e:
-            self._handle_connection_error(f"Exception reading register {address}: {e}")
+            self._handle_connection_error(
+                f"Exception reading register {address}: {e}", exc=e
+            )
             return None
         except (ConnectionError, OSError, TimeoutError, ValueError) as e:
-            self._handle_connection_error(f"Exception reading register {address}: {e}")
+            self._handle_connection_error(
+                f"Exception reading register {address}: {e}", exc=e
+            )
             return None
 
     def read_device_pn(self) -> tuple[str, str, str]:
@@ -481,8 +571,20 @@ class AnkerSolixModbusClient:
                 pn_hash = hashlib.sha256((salt + device_pn).encode()).hexdigest()
                 return (pn_hash, device_pn, raw_hex)
 
-            except (ConnectionError, OSError, TimeoutError, BrokenPipeError) as e:
-                # Handle connection errors - force disconnect and retry
+            except (
+                ConnectionError,
+                OSError,
+                TimeoutError,
+                BrokenPipeError,
+                ConnectionException,
+                ModbusException,
+            ) as e:
+                # Handle connection errors - force disconnect and retry.
+                # Not passing exc= to _handle_connection_error(): this
+                # method already force-disconnects explicitly below on
+                # every branch, so passing exc= would just trigger a
+                # redundant second disconnect via the exception-type
+                # check added for issue #81.
                 error_msg = (
                     f"Connection error reading device PN (attempt {attempt + 1}): {e}"
                 )
@@ -604,7 +706,7 @@ class AnkerSolixModbusClient:
                 is_connected,
                 socket_open,
             )
-            return WriteResult(success=False, error_reason=reason)
+            return WriteResult(success=False, error_reason=reason, is_transient=True)
 
         try:
             # Prepare raw register values for logging
@@ -703,6 +805,7 @@ class AnkerSolixModbusClient:
                     exception_code=exc_code,
                     exception_name=exc_name,
                     tx_frame=tx_frame,
+                    is_transient=False,
                 )
 
             self._logger.debug(
@@ -748,9 +851,9 @@ class AnkerSolixModbusClient:
                 data_type,
                 e,
             )
-            self._handle_connection_error(error_str)
+            self._handle_connection_error(error_str, exc=e)
             return WriteResult(
-                success=False, error_reason=f"{exception_type}: {error_str}"
+                success=False, error_reason=f"{exception_type}: {error_str}", is_transient=True
             )
 
     def get_connection_info(self) -> dict[str, Any]:
@@ -822,36 +925,81 @@ class AnkerSolixModbusClient:
         range_data: dict[tuple[int, int], list[int]] = {}
         processed_keys = set()
 
+        # Tracks whether a reconnect attempt already failed once during
+        # this get_all_data() call. If the device is fully unreachable
+        # (rather than just having a transient stale-buffer issue), every
+        # subsequent range would otherwise also pay for a full reconnect
+        # attempt, potentially stretching a single get_all_data() call
+        # (and the operation lock it's called under) far beyond its
+        # normal duration. Once tripped, remaining ranges skip the
+        # retry-once path and fail immediately, same as before this fix.
+        reconnect_exhausted = False
+
         if batch_ranges:
             # Sort by start address, keeping register type
             batch_ranges_sorted = sorted(batch_ranges, key=lambda x: x[0])
             for start, end, reg_type in batch_ranges_sorted:
-                try:
-                    register_count = end - start + 1
-                    if register_count <= 0:
-                        continue
-                    # Use appropriate function code based on register type
-                    if reg_type == "holding":
-                        result = self.client.read_holding_registers(
-                            address=start, count=register_count
+                register_count = end - start + 1
+                if register_count <= 0:
+                    continue
+
+                retried = False
+                while True:
+                    try:
+                        # Drain any stale bytes left over from a previous
+                        # cycle before issuing this request (issue #81).
+                        self._flush_recv_buffer()
+                        # Use appropriate function code based on register type
+                        if reg_type == "holding":
+                            result = self.client.read_holding_registers(
+                                address=start, count=register_count
+                            )
+                        else:
+                            result = self.client.read_input_registers(
+                                address=start, count=register_count
+                            )
+                        break
+                    except (
+                        ConnectionError,
+                        OSError,
+                        TimeoutError,
+                        ValueError,
+                        ConnectionException,
+                        ModbusException,
+                    ) as exc:
+                        self._handle_connection_error(
+                            f"Exception reading configured range {start}-{end} ({reg_type}): {exc}",
+                            exc=exc,
                         )
-                    else:
-                        result = self.client.read_input_registers(
-                            address=start, count=register_count
+                        if retried or reconnect_exhausted:
+                            for addr in range(start, end + 1):
+                                self._last_failed_registers.add(addr)
+                            result = None
+                            break
+                        retried = True
+                        # One bounded reconnect + retry before giving up on
+                        # this range (issue #81): a fresh TCP connection
+                        # discards any transaction-id state the device may
+                        # be out of sync with. `connect()` is a single,
+                        # synchronous, non-recursive attempt bounded by its
+                        # own connect timeout - it cannot loop or block
+                        # indefinitely.
+                        self._logger.info(
+                            "Retrying range %d-%d (%s) once after reconnect",
+                            start,
+                            end,
+                            reg_type,
                         )
-                except (
-                    ConnectionError,
-                    OSError,
-                    TimeoutError,
-                    ValueError,
-                    ConnectionException,
-                    ModbusException,
-                ) as exc:
-                    self._handle_connection_error(
-                        f"Exception reading configured range {start}-{end} ({reg_type}): {exc}"
-                    )
-                    for addr in range(start, end + 1):
-                        self._last_failed_registers.add(addr)
+                        self.disconnect()
+                        if not self.connect():
+                            reconnect_exhausted = True
+                            for addr in range(start, end + 1):
+                                self._last_failed_registers.add(addr)
+                            result = None
+                            break
+                        # Loop back and retry the read exactly once.
+
+                if result is None:
                     continue
 
                 if not result or result.isError():
@@ -944,6 +1092,7 @@ class AnkerSolixModbusClient:
             groups = self._batch_reader.group_data_points(data_points)
             for group in groups:
                 try:
+                    self._flush_recv_buffer()
                     result = self.client.read_input_registers(
                         address=group.start_address,
                         count=group.count,
@@ -957,7 +1106,8 @@ class AnkerSolixModbusClient:
                     ModbusException,
                 ) as exc:
                     self._handle_connection_error(
-                        f"Exception reading register group starting at {group.start_address}: {exc}"
+                        f"Exception reading register group starting at {group.start_address}: {exc}",
+                        exc=exc,
                     )
                     for key, config in group.data_points:
                         data[key] = self._default_value(
@@ -1048,6 +1198,12 @@ class AnkerSolixModbusClient:
                         successful_reads += 1
                         self._last_successful_registers.add(address)
                     except Exception as exc:
+                        # Not passing exc= here: this branch decodes an already
+                        # fetched register value (unit conversion, gain, etc.),
+                        # not a socket-level read. A decode error is a data
+                        # problem, not a connection problem — forcing a
+                        # reconnect here would be incorrect and would not fix
+                        # the underlying malformed data.
                         self._handle_connection_error(
                             f"Exception decoding batch data point {key}: {exc}"
                         )
@@ -1068,7 +1224,10 @@ class AnkerSolixModbusClient:
                 address = int(config["address"])
                 count = int(config.get("count", 1))
             except (KeyError, TypeError, ValueError):
-                data[key] = self._default_value(config.get("data_type", "UINT16"))
+                # Do not write a default value here: leaving the key absent
+                # lets downstream consumers (e.g. capability_entity checks)
+                # distinguish "never read" (key missing) from "read but
+                # decoded to 0".
                 failed_reads += 1
                 self._logger.debug(
                     "Invalid configuration for data point %s: %s", key, config

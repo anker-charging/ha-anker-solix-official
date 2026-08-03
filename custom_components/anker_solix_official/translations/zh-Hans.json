@@ -62,6 +62,9 @@
     "enable_backup_soc_first": {
       "message": "此功能需要在 Anker APP 的设置中启用备电保留开关。"
     },
+    "power_range_1_to_99_not_allowed": {
+      "message": "功率不允许设置在 {forbidden_min}-{forbidden_max}W 范围内，请设置 0W 或 {allowed_min}-{allowed_max}W。"
+    },
     "power_below_optimal_range": {
       "message": "您输入的功率为 {value}W，低于最佳工作范围，控制精准度可能发生偏差。"
     }

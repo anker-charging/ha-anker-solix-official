@@ -36,6 +36,7 @@ class ConnectionStateMachine:
             ConnectionState.CLOSING,
         ],
         ConnectionState.CONNECTED: [
+            ConnectionState.CONNECTING,
             ConnectionState.DISCONNECTED,
             ConnectionState.RECONNECTING,
             ConnectionState.ERROR,
@@ -99,6 +100,12 @@ class ConnectionStateMachine:
             True if transition succeeded, False if transition was invalid
         """
         async with self._lock:
+            if self._state == new_state:
+                self._logger.debug(
+                    "Already in state %s, no-op transition", new_state.value
+                )
+                return True
+
             if not self._is_valid_transition(self._state, new_state):
                 self._logger.warning(
                     "Invalid state transition: %s -> %s",
@@ -173,8 +180,13 @@ class ConnectionStateMachine:
         """
         return self._state == ConnectionState.DISCONNECTED
 
-    def reset(self) -> None:
-        """Reset state machine to DISCONNECTED."""
-        self._state = ConnectionState.DISCONNECTED
-        self._state_changed.set()
-        self._state_changed.clear()
+    async def reset(self) -> None:
+        """Reset state machine to DISCONNECTED.
+
+        Delegates to transition_to() so the reset goes through the same
+        lock, validity check, and idempotency handling as any other
+        transition, instead of writing self._state directly (which could
+        race with a concurrent transition_to() call suspended at an
+        await point inside the lock).
+        """
+        await self.transition_to(ConnectionState.DISCONNECTED)
