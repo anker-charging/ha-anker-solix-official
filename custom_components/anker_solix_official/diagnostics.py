@@ -24,6 +24,11 @@ async def async_get_config_entry_diagnostics(
             "consecutive_failures": coordinator._consecutive_failures,
             "ever_connected": coordinator._ever_connected,
             "initial_mode_sent": coordinator._initial_mode_sent,
+            "ip_address": async_redact_data(
+                {"ip_address": coordinator.ip_address}, TO_REDACT
+            )["ip_address"],
+            "ip_matches_config_entry": coordinator.ip_address
+            == entry.data.get("ip_address"),
         },
         "device": {
             "model": coordinator.device_info.get("model"),

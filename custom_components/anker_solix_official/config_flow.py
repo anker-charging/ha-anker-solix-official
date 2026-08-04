@@ -295,6 +295,18 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         reconfigure_entry = self._get_reconfigure_entry()
 
+        # Prefer the coordinator's live IP over entry.data: mDNS auto-recovery
+        # updates the IP in-memory only (no persistence, no reload) to avoid
+        # tearing down the integration on every automatic IP switch. Falling
+        # back to entry.data keeps this working even if the integration
+        # failed to load (coordinator not in hass.data).
+        coordinator = self.hass.data.get(DOMAIN, {}).get(reconfigure_entry.entry_id)
+        live_ip = (
+            coordinator.ip_address
+            if coordinator
+            else reconfigure_entry.data.get("ip_address", "")
+        )
+
         if user_input is not None:
             new_ip = user_input.get("ip_address", "").strip()
             new_port = user_input.get("port", 502)
@@ -328,7 +340,7 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(
                         "ip_address",
-                        default=reconfigure_entry.data.get("ip_address", ""),
+                        default=live_ip,
                     ): str,
                     vol.Required(
                         "port",

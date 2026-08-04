@@ -20,6 +20,7 @@ from .async_resource_manager import AsyncResourceManager
 from .throttled_logger import ThrottledLogger
 from .product_mapping import get_product_name_from_config
 from .device_logger import DeviceLoggerAdapter
+from .mdns_helper import find_device_ip_by_sn
 
 
 class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
@@ -113,6 +114,14 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         self._device_unavailable_logged = (
             False  # HA best practice: log once on unavailable
         )
+        self._mdns_lookup_done = False
+        self._last_mdns_lookup = 0
+
+        sn = self._get_stored_sn()
+        if sn:
+            self._initial_mdns_sn = sn
+        else:
+            self._initial_mdns_sn = None
 
         # Device information - defer model detection until connection is established
         device_model = "--"
@@ -585,6 +594,107 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         except Exception as e:
             self.logger.error("Error in auto-set mode on connect: %s", e)
 
+    def _get_stored_sn(self) -> str:
+        """Get device SN from config entry unique_id.
+
+        During config flow, SN is read via Modbus and stored as unique_id.
+        If SN read failed during setup, unique_id falls back to IP address.
+        """
+        unique_id = self.entry.unique_id or ""
+        if unique_id and not self._validate_ipv4(unique_id) and len(unique_id) >= 10:
+            return unique_id
+        return ""
+
+    @staticmethod
+    def _validate_ipv4(ip: str) -> bool:
+        parts = ip.split(".")
+        if len(parts) != 4:
+            return False
+        try:
+            return all(0 <= int(p) <= 255 for p in parts)
+        except ValueError:
+            return False
+
+    def _apply_mdns_ip_update(self, new_ip: str) -> None:
+        """Update in-memory connection target after mDNS resolves a new IP.
+
+        Not persisted to entry.data: persisting would trigger the config
+        entry update listener (_async_update_listener in __init__.py),
+        tearing down and rebuilding the whole integration on every
+        automatic IP switch. The startup mDNS check re-discovers the
+        current IP on every HA restart, so persistence is unnecessary.
+        """
+        self.logger.info(
+            "mDNS: IP changed %s → %s, updating connection target",
+            self.ip_address,
+            new_ip,
+        )
+        self.ip_address = new_ip
+        self.device_logger = DeviceLoggerAdapter(
+            self.device_logger.logger,
+            device_name=self.device_name,
+            device_ip=new_ip,
+            device_port=self.port,
+        )
+        self.modbus_manager._ip_address = new_ip
+        self.modbus_manager._client = None
+
+    async def _async_startup_mdns_check(self) -> None:
+        """Background mDNS lookup at startup; only applies if still disconnected.
+
+        Scheduled as a fire-and-forget task from _connection_loop so it
+        runs concurrently with the first connection attempt instead of
+        delaying it — a still-working configured IP must never be held
+        up by an unconditional mDNS scan. Only applies the discovered IP
+        if the initial connection attempt has not already succeeded by
+        the time mDNS resolves (self._ever_connected), otherwise the
+        currently-working IP is left untouched.
+        """
+        if not self._initial_mdns_sn:
+            return
+        new_ip = await find_device_ip_by_sn(self._initial_mdns_sn, timeout=5)
+        if not new_ip or new_ip == self.ip_address or self._ever_connected:
+            return
+        self._apply_mdns_ip_update(new_ip)
+
+    async def _maybe_mdns_lookup(self) -> None:
+        """Attempt mDNS lookup to find device's new IP after connection failures.
+
+        Triggers when:
+        - 3 consecutive failures (first time)
+        - Every 60s after that (aligned with backoff interval)
+
+        Does NOT trigger if:
+        - unique_id is not a SN (can't search without SN)
+        - Last mDNS lookup was < 55s ago (rate limit)
+        """
+        if self._consecutive_failures < 3:
+            return
+
+        now = time.time()
+        if now - self._last_mdns_lookup < 55:
+            return
+
+        self._last_mdns_lookup = now
+
+        sn = self._get_stored_sn()
+        if not sn:
+            return
+
+        new_ip = await find_device_ip_by_sn(sn)
+
+        if new_ip is None:
+            return
+
+        if new_ip == self.ip_address:
+            return
+
+        self._apply_mdns_ip_update(new_ip)
+
+        self._consecutive_failures = 0
+        self._connection_retry_interval = CONNECTION_RETRY_DELAY
+        self._device_unavailable_logged = False
+
     def _should_attempt_reconnection(self) -> bool:
         """Check if reconnection should be attempted."""
         current_time = time.time()
@@ -646,6 +756,8 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
             self._connection_retry_interval = 60
         else:
             self._connection_retry_interval = 300
+
+        await self._maybe_mdns_lookup()
 
     async def _read_device_pn(self) -> tuple[str, str, str]:
         """Read device PN from register 0x8000 (32768) using unified method.
@@ -762,6 +874,11 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
     async def _connection_loop(self) -> None:
         """Unified background loop: retry connect every 10s until a successful data read, then poll at scan interval."""
+        if self._initial_mdns_sn and not self._ever_connected:
+            self._resource_manager.create_task(
+                self._async_startup_mdns_check(), name="startup_mdns_check"
+            )
+
         while not self._stop_bg:
             self.logger.debug("[bg] Background loop iteration starting")
             try:
