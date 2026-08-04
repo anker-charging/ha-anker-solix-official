@@ -82,21 +82,45 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
             return True
 
         if not self.coordinator.data or capability_entity not in self.coordinator.data:
+            _LOGGER.debug(
+                "Capability gate: %s fail-open (key '%s' not in coordinator.data)",
+                self._entity_key,
+                capability_entity,
+            )
             return True
 
         mask_address = self.coordinator.get_data_point_address(capability_entity)
         if mask_address is not None and not self.coordinator.is_register_available(
             mask_address
         ):
+            _LOGGER.debug(
+                "Capability gate: %s fail-open (register %d marked unavailable)",
+                self._entity_key,
+                mask_address,
+            )
             return True
 
         mask_value = self.coordinator.data.get(capability_entity)
         try:
             mask = int(mask_value)
         except (ValueError, TypeError):
+            _LOGGER.debug(
+                "Capability gate: %s fail-open (mask value %r is not int)",
+                self._entity_key,
+                mask_value,
+            )
             return True
 
-        return bool(mask & (1 << capability_bit))
+        result = bool(mask & (1 << capability_bit))
+        _LOGGER.debug(
+            "Capability gate: %s mask=0x%04X bit=%d -> %s (entity will be %s)",
+            self._entity_key,
+            mask,
+            capability_bit,
+            result,
+            "visible" if result else "HIDDEN",
+        )
+        return result
 
     def _get_raw_value(self, default: Any = None) -> Any:
         """Get raw value from coordinator data.
