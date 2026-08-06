@@ -652,7 +652,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         """
         if not self._initial_mdns_sn:
             return
-        new_ip = await find_device_ip_by_sn(self._initial_mdns_sn, timeout=5)
+        new_ip = await find_device_ip_by_sn(self.hass, self._initial_mdns_sn, timeout=5)
         if not new_ip or new_ip == self.ip_address or self._ever_connected:
             return
         self._apply_mdns_ip_update(new_ip)
@@ -681,7 +681,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         if not sn:
             return
 
-        new_ip = await find_device_ip_by_sn(sn)
+        new_ip = await find_device_ip_by_sn(self.hass, sn)
 
         if new_ip is None:
             return

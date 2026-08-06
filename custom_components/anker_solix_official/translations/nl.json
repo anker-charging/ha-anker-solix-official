@@ -260,8 +260,8 @@
       "battery_power_direction": {
         "name": "Netvermogen",
         "state": {
-          "charge": "Netimport",
-          "discharge": "Teruglevering"
+          "charge": "Laadvermogen van net naar batterij",
+          "discharge": "Uitgangsvermogen van de netpoort"
         }
       },
       "export_power_control": {
@@ -285,7 +285,7 @@
         "name": "Batterij laad-/ontlaadinstelpunt"
       },
       "battery_power_setpoint": {
-        "name": "Netvermogen"
+        "name": "Vermogensbesturing"
       },
       "charging_limit_soc": {
         "name": "Maximale laadlimiet"

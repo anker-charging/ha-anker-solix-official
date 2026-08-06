@@ -1,6 +1,10 @@
 import asyncio
 import logging
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -8,8 +12,8 @@ MDNS_SERVICE_TYPE = "_anker_power._udp.local."
 MDNS_SCAN_TIMEOUT = 5
 
 
-def _discover_devices_sync(timeout: int = MDNS_SCAN_TIMEOUT) -> list[dict]:
-    from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
+def _discover_devices_sync(zc, timeout: int = MDNS_SCAN_TIMEOUT) -> list[dict]:
+    from zeroconf import ServiceBrowser, ServiceListener
 
     class _Listener(ServiceListener):
         def __init__(self):
@@ -54,7 +58,6 @@ def _discover_devices_sync(timeout: int = MDNS_SCAN_TIMEOUT) -> list[dict]:
         def remove_service(self, zc, type_, name):
             pass
 
-    zc = Zeroconf(use_asyncio=False)
     listener = _Listener()
     browser = ServiceBrowser(zc, MDNS_SERVICE_TYPE, listener)
     try:
@@ -63,18 +66,26 @@ def _discover_devices_sync(timeout: int = MDNS_SCAN_TIMEOUT) -> list[dict]:
         pass
     finally:
         browser.cancel()
-        zc.close()
 
     return listener.devices
 
 
-async def find_device_ip_by_sn(sn: str, timeout: int = MDNS_SCAN_TIMEOUT) -> str | None:
+async def find_device_ip_by_sn(
+    hass: "HomeAssistant", sn: str, timeout: int = MDNS_SCAN_TIMEOUT
+) -> str | None:
     if not sn or len(sn) < 8:
+        return None
+
+    from homeassistant.components.zeroconf import async_get_instance
+
+    try:
+        zc = await async_get_instance(hass)
+    except Exception:
         return None
 
     loop = asyncio.get_event_loop()
     try:
-        devices = await loop.run_in_executor(None, _discover_devices_sync, timeout)
+        devices = await loop.run_in_executor(None, _discover_devices_sync, zc, timeout)
     except Exception:
         return None
 

@@ -6,7 +6,9 @@
     "@anker-charging"
   ],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": [
+    "zeroconf"
+  ],
   "documentation": "https://github.com/anker-charging/ha-anker-solix-official",
   "integration_type": "hub",
   "iot_class": "local_polling",
