@@ -160,8 +160,8 @@ read_quantities:
     count: 1
     icon: "mdi:flash"
 
-  phase_a_forward_active_energy:
-    translation_key: "phase_a_forward_active_energy"
+  primary_phase_a_forward_active_energy:
+    translation_key: "primary_phase_a_forward_active_energy"
     address: 10650
     data_type: "UINT32"
     unit: "kWh"
@@ -169,8 +169,8 @@ read_quantities:
     count: 1
     icon: "mdi:meter-electric"
   
-  phase_b_forward_active_energy:
-    translation_key: "phase_b_forward_active_energy"
+  primary_phase_b_forward_active_energy:
+    translation_key: "primary_phase_b_forward_active_energy"
     address: 10652
     data_type: "UINT32"
     unit: "kWh"
@@ -178,8 +178,8 @@ read_quantities:
     count: 1
     icon: "mdi:meter-electric"
   
-  phase_c_forward_active_energy:
-    translation_key: "phase_c_forward_active_energy"
+  primary_phase_c_forward_active_energy:
+    translation_key: "primary_phase_c_forward_active_energy"
     address: 10654
     data_type: "UINT32"
     unit: "kWh"
@@ -187,8 +187,8 @@ read_quantities:
     count: 1
     icon: "mdi:meter-electric"
   
-  total_forward_active_energy:
-    translation_key: "total_forward_active_energy"
+  primary_total_forward_active_energy:
+    translation_key: "primary_total_forward_active_energy"
     address: 10656
     data_type: "UINT32"
     unit: "kWh"
@@ -196,8 +196,8 @@ read_quantities:
     count: 1
     icon: "mdi:meter-electric"
   
-  phase_a_reverse_active_energy:
-    translation_key: "phase_a_reverse_active_energy"
+  primary_phase_a_reverse_active_energy:
+    translation_key: "primary_phase_a_reverse_active_energy"
     address: 10658
     data_type: "UINT32"
     unit: "kWh"
@@ -205,8 +205,8 @@ read_quantities:
     count: 1
     icon: "mdi:meter-electric"
   
-  phase_b_reverse_active_energy:
-    translation_key: "phase_b_reverse_active_energy"
+  primary_phase_b_reverse_active_energy:
+    translation_key: "primary_phase_b_reverse_active_energy"
     address: 10660
     data_type: "UINT32"
     unit: "kWh"
@@ -214,8 +214,8 @@ read_quantities:
     count: 1
     icon: "mdi:meter-electric"
   
-  phase_c_reverse_active_energy:
-    translation_key: "phase_c_reverse_active_energy"
+  primary_phase_c_reverse_active_energy:
+    translation_key: "primary_phase_c_reverse_active_energy"
     address: 10662
     data_type: "UINT32"
     unit: "kWh"
@@ -223,8 +223,8 @@ read_quantities:
     count: 1
     icon: "mdi:meter-electric"
   
-  total_reverse_active_energy:
-    translation_key: "total_reverse_active_energy"
+  primary_total_reverse_active_energy:
+    translation_key: "primary_total_reverse_active_energy"
     address: 10664
     data_type: "UINT32"
     unit: "kWh"
