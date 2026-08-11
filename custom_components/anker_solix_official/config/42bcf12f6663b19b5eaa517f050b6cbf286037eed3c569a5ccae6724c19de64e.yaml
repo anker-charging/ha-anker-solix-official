@@ -165,73 +165,72 @@ read_quantities:
     address: 10650
     data_type: "UINT32"
     unit: "kWh"
-    gain: 0.1
-    count: 1
+    gain: 10
+    count: 2
     icon: "mdi:meter-electric"
-  
+
   primary_phase_b_forward_active_energy:
     translation_key: "primary_phase_b_forward_active_energy"
     address: 10652
     data_type: "UINT32"
     unit: "kWh"
-    gain: 0.1
-    count: 1
+    gain: 10
+    count: 2
     icon: "mdi:meter-electric"
-  
+
   primary_phase_c_forward_active_energy:
     translation_key: "primary_phase_c_forward_active_energy"
     address: 10654
     data_type: "UINT32"
     unit: "kWh"
-    gain: 0.1
-    count: 1
+    gain: 10
+    count: 2
     icon: "mdi:meter-electric"
-  
+
   primary_total_forward_active_energy:
     translation_key: "primary_total_forward_active_energy"
     address: 10656
     data_type: "UINT32"
     unit: "kWh"
-    gain: 0.1
-    count: 1
+    gain: 10
+    count: 2
     icon: "mdi:meter-electric"
-  
+
   primary_phase_a_reverse_active_energy:
     translation_key: "primary_phase_a_reverse_active_energy"
     address: 10658
     data_type: "UINT32"
     unit: "kWh"
-    gain: 0.1
-    count: 1
+    gain: 10
+    count: 2
     icon: "mdi:meter-electric"
-  
+
   primary_phase_b_reverse_active_energy:
     translation_key: "primary_phase_b_reverse_active_energy"
     address: 10660
     data_type: "UINT32"
     unit: "kWh"
-    gain: 0.1
-    count: 1
+    gain: 10
+    count: 2
     icon: "mdi:meter-electric"
-  
+
   primary_phase_c_reverse_active_energy:
     translation_key: "primary_phase_c_reverse_active_energy"
     address: 10662
     data_type: "UINT32"
     unit: "kWh"
-    gain: 0.1
-    count: 1
+    gain: 10
+    count: 2
     icon: "mdi:meter-electric"
-  
+
   primary_total_reverse_active_energy:
     translation_key: "primary_total_reverse_active_energy"
     address: 10664
     data_type: "UINT32"
     unit: "kWh"
-    gain: 0.1
-    count: 1
+    gain: 10
+    count: 2
     icon: "mdi:meter-electric"
-
 
   # =======================================================================
   # Secondary CT Data (CT Group 2)
