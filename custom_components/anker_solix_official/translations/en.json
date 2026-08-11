@@ -197,6 +197,30 @@
       "primary_phase_3_voltage": {
         "name": "Main CT Phase 3 Voltage"
       },
+      "primary_phase_a_forward_active_energy": {
+        "name": "Main CT Phase A Forward Active Energy"
+      },
+      "primary_phase_b_forward_active_energy": {
+        "name": "Main CT Phase B Forward Active Energy"
+      },
+      "primary_phase_c_forward_active_energy": {
+        "name": "Main CT Phase C Forward Active Energy"
+      },
+      "primary_total_forward_active_energy": {
+        "name": "Main CT Total Forward Active Energy"
+      },
+      "primary_phase_a_reverse_active_energy": {
+        "name": "Main CT Phase A Reverse Active Energy"
+      },
+      "primary_phase_b_reverse_active_energy": {
+        "name": "Main CT Phase B Reverse Active Energy"
+      },
+      "primary_phase_c_reverse_active_energy": {
+        "name": "Main CT Phase C Reverse Active Energy"
+      },
+      "primary_total_reverse_active_energy": {
+        "name": "Main CT Total Reverse Active Energy"
+      },
       "secondary_total_active_power": {
         "name": "Secondary CT Total Active Power"
       },

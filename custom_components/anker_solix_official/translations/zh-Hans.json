@@ -197,6 +197,30 @@
       "primary_phase_3_voltage": {
         "name": "主CTPhase3有功电压"
       },
+      "primary_phase_a_forward_active_energy": {
+        "name": "主CTPhaseA正向有功电能"
+      },
+      "primary_phase_b_forward_active_energy": {
+        "name": "主CTPhaseB正向有功电能"
+      },
+      "primary_phase_c_forward_active_energy": {
+        "name": "主CTPhaseC正向有功电能"
+      },
+      "primary_total_forward_active_energy": {
+        "name": "主CT总正向有功电能"
+      },
+      "primary_phase_a_reverse_active_energy": {
+        "name": "主CTPhaseA反向有功电能"
+      },
+      "primary_phase_b_reverse_active_energy": {
+        "name": "主CTPhaseB反向有功电能"
+      },
+      "primary_phase_c_reverse_active_energy": {
+        "name": "主CTPhaseC反向有功电能"
+      },
+      "primary_total_reverse_active_energy": {
+        "name": "主CT总反向有功电能"
+      },
       "secondary_total_active_power": {
         "name": "副CT总有功功率"
       },
