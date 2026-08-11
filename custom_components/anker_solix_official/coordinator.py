@@ -75,8 +75,6 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         self._stop_bg = False
         self._status = "disconnected"  # disconnected | connecting | connected
         self._latest_data: dict[str, Any] = {}
-        # Serialize all modbus I/O
-        self._io_lock = asyncio.Lock()
         self._selected_config_file: str | None = None
         self._ever_connected: bool = False
         # Persistent flag: True once the initial auto-mode-set has been
@@ -509,7 +507,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                 self.logger.info(
                     "Marked %d registers as unavailable: %s",
                     len(new_failures),
-                    sorted(new_failures),
+                    ", ".join(f"{a} (0x{a:04X})" for a in sorted(new_failures)),
                 )
             
             recovered = successful & self._unavailable_registers
@@ -518,7 +516,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                 self.logger.info(
                     "Recovered %d registers, now available: %s",
                     len(recovered),
-                    sorted(recovered),
+                    ", ".join(f"{a} (0x{a:04X})" for a in sorted(recovered)),
                 )
         except Exception as e:
             self.logger.debug("Failed to update unavailable registers: %s", e)
@@ -567,10 +565,9 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                 address,
             )
 
-            async with self._io_lock:
-                success = await self.modbus_manager.write_register(
-                    address, auto_mode, data_type
-                )
+            success = await self.modbus_manager.write_register(
+                address, auto_mode, data_type
+            )
 
             if success:
                 # Update data dict so UI first frame shows target mode
@@ -615,7 +612,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         except ValueError:
             return False
 
-    def _apply_mdns_ip_update(self, new_ip: str) -> None:
+    async def _apply_mdns_ip_update(self, new_ip: str) -> None:
         """Update in-memory connection target after mDNS resolves a new IP.
 
         Not persisted to entry.data: persisting would trigger the config
@@ -636,8 +633,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
             device_ip=new_ip,
             device_port=self.port,
         )
-        self.modbus_manager._ip_address = new_ip
-        self.modbus_manager._client = None
+        await self.modbus_manager.update_ip_address(new_ip)
 
     async def _async_startup_mdns_check(self) -> None:
         """Background mDNS lookup at startup; only applies if still disconnected.
@@ -655,7 +651,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         new_ip = await find_device_ip_by_sn(self.hass, self._initial_mdns_sn, timeout=5)
         if not new_ip or new_ip == self.ip_address or self._ever_connected:
             return
-        self._apply_mdns_ip_update(new_ip)
+        await self._apply_mdns_ip_update(new_ip)
 
     async def _maybe_mdns_lookup(self) -> None:
         """Attempt mDNS lookup to find device's new IP after connection failures.
@@ -689,7 +685,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         if new_ip == self.ip_address:
             return
 
-        self._apply_mdns_ip_update(new_ip)
+        await self._apply_mdns_ip_update(new_ip)
 
         self._consecutive_failures = 0
         self._connection_retry_interval = CONNECTION_RETRY_DELAY
@@ -766,22 +762,21 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
             tuple: (pn_hash, raw_pn, raw_registers_hex) or ("", "", "") on failure
         """
         try:
-            async with self._io_lock:
-                self.logger.debug("Attempting to read device PN")
-                result = await self.modbus_manager.read_device_pn()
-                pn_hash, raw_pn, raw_hex = result
-                if pn_hash:
-                    self.logger.info(
-                        "Device PN read successfully - hash: '%s', Registers: [%s]",
-                        pn_hash,
-                        raw_hex,
-                    )
-                else:
-                    self.logger.warning(
-                        "Failed to read device PN - Registers: [%s]",
-                        raw_hex,
-                    )
-                return result
+            self.logger.debug("Attempting to read device PN")
+            result = await self.modbus_manager.read_device_pn()
+            pn_hash, raw_pn, raw_hex = result
+            if pn_hash:
+                self.logger.info(
+                    "Device PN read successfully - hash: '%s', Registers: [%s]",
+                    pn_hash,
+                    raw_hex,
+                )
+            else:
+                self.logger.warning(
+                    "Failed to read device PN - Registers: [%s]",
+                    raw_hex,
+                )
+            return result
         except Exception as e:
             self.logger.error(
                 "Exception reading device PN: %s (type: %s)", e, type(e).__name__
@@ -889,9 +884,8 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                     else:
                         self.logger.debug("[bg] Reconnection attempt starting")
                     # Test connection using device-specific modbus manager
-                    async with self._io_lock:
-                        client = await self.modbus_manager.get_client()
-                        connected = client is not None
+                    client = await self.modbus_manager.get_client()
+                    connected = client is not None
                     if not connected:
                         await self._handle_connection_failure("[bg] modbus_manager.get_client() failed")
                         await asyncio.sleep(self._connection_retry_interval)
@@ -936,12 +930,11 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                         if self._device_config_cache
                         else 0,
                     )
-                    async with self._io_lock:
-                        data = await self.modbus_manager.get_all_data(
-                            self._device_config_cache,
-                            batch_ranges=self._batch_ranges_cache,
-                            use_batch_optimization=True,
-                        )
+                    data = await self.modbus_manager.get_all_data(
+                        self._device_config_cache,
+                        batch_ranges=self._batch_ranges_cache,
+                        use_batch_optimization=True,
+                    )
                     await self._update_unavailable_registers()
                     if not data:
                         # Treat as failure
@@ -1073,12 +1066,11 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
                     if self._is_config_cache_valid():
                         self.logger.debug("[bg] Starting periodic data read")
-                        async with self._io_lock:
-                            data = await self.modbus_manager.get_all_data(
-                                self._device_config_cache,
-                                batch_ranges=self._batch_ranges_cache,
-                                use_batch_optimization=True,
-                            )
+                        data = await self.modbus_manager.get_all_data(
+                            self._device_config_cache,
+                            batch_ranges=self._batch_ranges_cache,
+                            use_batch_optimization=True,
+                        )
                         await self._update_unavailable_registers()
                         if data:
                             # Override model sensor value with product name (MUST do before publishing)
@@ -1169,9 +1161,8 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
         # Attempt to connect using device-specific modbus manager, then load device-specific config file
         try:
-            async with self._io_lock:
-                client = await self.modbus_manager.get_client()
-                connected = client is not None
+            client = await self.modbus_manager.get_client()
+            connected = client is not None
             if not connected:
                 return {}
 

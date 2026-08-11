@@ -38,13 +38,10 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _test_modbus_connection(self, ip_address: str, port: int = 502) -> bool:
         """Test Modbus connection to the device."""
-        import asyncio
-
-        loop = asyncio.get_event_loop()
         client = None
         try:
             client = AnkerSolixModbusClient(ip_address, port)
-            return await loop.run_in_executor(None, client.connect)
+            return await client.connect()
         except Exception as e:
             _LOGGER.warning(
                 "Failed to test Modbus connection to %s:%d: %s", ip_address, port, e
@@ -53,7 +50,7 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         finally:
             try:
                 if client:
-                    await loop.run_in_executor(None, client.disconnect)
+                    await client.disconnect()
             except Exception as e:
                 _LOGGER.debug("Error disconnecting during connection test: %s", e)
 
@@ -65,8 +62,7 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             client = AnkerSolixModbusClient(ip_address, port)
 
-            # Run blocking connect() in executor to avoid blocking event loop
-            connected = await loop.run_in_executor(None, client.connect)
+            connected = await client.connect()
             if not connected:
                 _LOGGER.warning(
                     "Failed to connect to device at %s:%d for PN detection",
@@ -76,7 +72,7 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return False, ""
 
             # Read device PN using unified method (returns tuple: pn_hash, raw_pn, raw_hex)
-            result = await loop.run_in_executor(None, client.read_device_pn)
+            result = await client.read_device_pn()
             pn_hash, raw_pn, raw_hex = result
             if not pn_hash:
                 _LOGGER.warning(
@@ -136,11 +132,8 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     sn_address = sn_cfg.get("address")
                     sn_count = sn_cfg.get("count", 12)
                     if sn_address:
-                        sn_result = await loop.run_in_executor(
-                            None,
-                            lambda: client.client.read_input_registers(
-                                address=sn_address, count=sn_count
-                            ),
+                        sn_result = await client.client.read_input_registers(
+                            address=sn_address, count=sn_count
                         )
                         if sn_result and not sn_result.isError():
                             regs = getattr(sn_result, "registers", []) or []
@@ -182,7 +175,7 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         finally:
             try:
                 if client:
-                    await loop.run_in_executor(None, client.disconnect)
+                    await client.disconnect()
             except Exception as e:
                 _LOGGER.debug("Error disconnecting during device check: %s", e)
 

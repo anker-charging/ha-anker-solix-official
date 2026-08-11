@@ -130,9 +130,7 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
         if not self.coordinator.is_connected():
             return False
 
-        if self._register_address is not None:
-            if not self.coordinator.is_register_available(self._register_address):
-                return False
+        self._log_unreadable_register(self._register_address)
 
         visibility_entity = self._config.get("visibility_entity")
         if visibility_entity:

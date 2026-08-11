@@ -24,7 +24,12 @@ batch_read_ranges:
     - 10000-10050
     - 10090-10156
     - 10208-10265
-    - 32768-32775
+    # Stops at 32774: 0x8007 (parallel_capability_mask) is read on its own
+    # instead. A batch that spans it gets a silent zero appended by firmware
+    # that does not implement 0x8007, while a single-register read of the same
+    # address correctly answers Illegal Data Address -- so batching it makes an
+    # unimplemented mask indistinguishable from a device reporting "no features".
+    - 32768-32774
   holding:
     - 10060-10072
     - 10074-10081
@@ -264,6 +269,9 @@ read_quantities:
   parallel_capability_mask:
     translation_key: "parallel_capability_mask"
     address: 0x8007
+    # Required: this address sits outside batch_read_ranges on purpose, so it is
+    # fetched by a single read that needs an explicit function code (FC04).
+    register_type: "input"
     data_type: "UINT16"
     unit: "/"
     gain: 1

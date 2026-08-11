@@ -211,3 +211,5 @@ release.sh
 
 # SIPA generated output
 AnkOutput/
+
+.omo/

@@ -90,9 +90,7 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
         if not self.coordinator.is_connected():
             return False
 
-        if self._register_address is not None:
-            if not self.coordinator.is_register_available(self._register_address):
-                return False
+        self._log_unreadable_register(self._register_address)
 
         version_gate = self._config.get("version_gate")
         if version_gate:

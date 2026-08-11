@@ -189,9 +189,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
         if not self.coordinator.is_connected():
             return False
 
-        if self._register_address is not None:
-            if not self.coordinator.is_register_available(self._register_address):
-                return False
+        self._log_unreadable_register(self._register_address)
 
         if not self._is_capability_supported():
             return False
@@ -247,7 +245,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
             return None
 
         # Check write_condition: if not met, show "unknown" to indicate feature is disabled
-        condition_passed, _ = self._check_write_condition()
+        condition_passed, _ = self._check_write_condition(for_write=False)
         if not condition_passed:
             return None
 
