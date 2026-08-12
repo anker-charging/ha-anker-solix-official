@@ -1425,7 +1425,7 @@ class AnkerSolixModbusClient:
         self._last_successful_registers -= self._last_failed_registers
 
         if failed_reads:
-            self._logger.info(
+            self._logger.debug(
                 "Batch read completed with partial failures: %d successful, %d failed",
                 successful_reads,
                 failed_reads,
