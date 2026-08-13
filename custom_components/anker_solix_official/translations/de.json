@@ -197,6 +197,30 @@
       "primary_phase_3_voltage": {
         "name": "Haupt-CT Phase 3 Spannung"
       },
+      "primary_phase_a_forward_active_energy": {
+        "name": "Haupt-CT Phase A Netzbezug"
+      },
+      "primary_phase_b_forward_active_energy": {
+        "name": "Haupt-CT Phase B Netzbezug"
+      },
+      "primary_phase_c_forward_active_energy": {
+        "name": "Haupt-CT Phase C Netzbezug"
+      },
+      "primary_total_forward_active_energy": {
+        "name": "Haupt-CT Gesamt-Netzbezug"
+      },
+      "primary_phase_a_reverse_active_energy": {
+        "name": "Haupt-CT Phase A Einspeisung"
+      },
+      "primary_phase_b_reverse_active_energy": {
+        "name": "Haupt-CT Phase B Einspeisung"
+      },
+      "primary_phase_c_reverse_active_energy": {
+        "name": "Haupt-CT Phase C Einspeisung"
+      },
+      "primary_total_reverse_active_energy": {
+        "name": "Haupt-CT Gesamt-Einspeisung"
+      },
       "secondary_total_active_power": {
         "name": "Sekundäre CT-Gesamtwirkleistung"
       },
