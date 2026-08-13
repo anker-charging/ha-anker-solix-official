@@ -1,5 +1,7 @@
 {
     "name": "Anker SOLIX Official",
     "homeassistant": "2024.1.6",
-    "render_readme": true
+    "render_readme": true,
+    "zip_release": true,
+    "filename": "anker_solix_official.zip"
 }
