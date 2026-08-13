@@ -198,28 +198,28 @@
         "name": "Hoofd-CT Fase 3 spanning"
       },
       "primary_phase_a_forward_active_energy": {
-        "name": "Hoofd-CT Fase A Voorwaartse actieve energie"
+        "name": "Hoofd-CT Fase A Verbruik"
       },
       "primary_phase_b_forward_active_energy": {
-        "name": "Hoofd-CT Fase B Voorwaartse actieve energie"
+        "name": "Hoofd-CT Fase B Verbruik"
       },
       "primary_phase_c_forward_active_energy": {
-        "name": "Hoofd-CT Fase C Voorwaartse actieve energie"
+        "name": "Hoofd-CT Fase C Verbruik"
       },
       "primary_total_forward_active_energy": {
-        "name": "Hoofd-CT Totale voorwaartse actieve energie"
+        "name": "Hoofd-CT Totaal verbruik"
       },
       "primary_phase_a_reverse_active_energy": {
-        "name": "Hoofd-CT Fase A Omgekeerde actieve energie"
+        "name": "Hoofd-CT Fase A Teruglevering"
       },
       "primary_phase_b_reverse_active_energy": {
-        "name": "Hoofd-CT Fase B Omgekeerde actieve energie"
+        "name": "Hoofd-CT Fase B Teruglevering"
       },
       "primary_phase_c_reverse_active_energy": {
-        "name": "Hoofd-CT Fase C Omgekeerde actieve energie"
+        "name": "Hoofd-CT Fase C Teruglevering"
       },
       "primary_total_reverse_active_energy": {
-        "name": "Hoofd-CT Totale omgekeerde actieve energie"
+        "name": "Hoofd-CT Totale teruglevering"
       },
       "secondary_total_active_power": {
         "name": "Totale actieve vermogen van de secundaire CT"

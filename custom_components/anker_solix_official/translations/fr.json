@@ -198,28 +198,28 @@
         "name": "Tension du CT principal Phase 3"
       },
       "primary_phase_a_forward_active_energy": {
-        "name": "Énergie active directe du CT principal Phase A"
+        "name": "CT principal Phase A Consommation"
       },
       "primary_phase_b_forward_active_energy": {
-        "name": "Énergie active directe du CT principal Phase B"
+        "name": "CT principal Phase B Consommation"
       },
       "primary_phase_c_forward_active_energy": {
-        "name": "Énergie active directe du CT principal Phase C"
+        "name": "CT principal Phase C Consommation"
       },
       "primary_total_forward_active_energy": {
-        "name": "Énergie active directe totale du CT principal"
+        "name": "CT principal Consommation totale"
       },
       "primary_phase_a_reverse_active_energy": {
-        "name": "Énergie active inverse du CT principal Phase A"
+        "name": "CT principal Phase A Injection"
       },
       "primary_phase_b_reverse_active_energy": {
-        "name": "Énergie active inverse du CT principal Phase B"
+        "name": "CT principal Phase B Injection"
       },
       "primary_phase_c_reverse_active_energy": {
-        "name": "Énergie active inverse du CT principal Phase C"
+        "name": "CT principal Phase C Injection"
       },
       "primary_total_reverse_active_energy": {
-        "name": "Énergie active inverse totale du CT principal"
+        "name": "CT principal Injection totale"
       },
       "secondary_total_active_power": {
         "name": "Puissance active totale du CT secondaire"
