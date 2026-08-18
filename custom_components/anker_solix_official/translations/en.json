@@ -260,8 +260,8 @@
       "battery_power_direction": {
         "name": "Grid Flow",
         "state": {
-          "charge": "Grid Import",
-          "discharge": "Grid Export"
+          "charge": "Grid-to-Battery Charge Power",
+          "discharge": "On-Grid Port Output Power"
         }
       },
       "export_power_control": {
@@ -285,7 +285,7 @@
         "name": "Battery Charge/Discharge Setpoint"
       },
       "battery_power_setpoint": {
-        "name": "Target Grid Power"
+        "name": "Power Control"
       },
       "charging_limit_soc": {
         "name": "Charging Limit"

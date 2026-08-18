@@ -260,8 +260,8 @@
       "battery_power_direction": {
         "name": "Leistungsfluss",
         "state": {
-          "charge": "Netzbezug",
-          "discharge": "Netzeinspeisung"
+          "charge": "Netz-zu-Batterie-Ladeleistung",
+          "discharge": "Netzport-Ausgangsleistung"
         }
       },
       "export_power_control": {
@@ -285,7 +285,7 @@
         "name": "Batterie-Lade-/Entlade-Sollwert"
       },
       "battery_power_setpoint": {
-        "name": "Netzleistung"
+        "name": "Leistungssteuerung"
       },
       "charging_limit_soc": {
         "name": "Ladeobergrenze"

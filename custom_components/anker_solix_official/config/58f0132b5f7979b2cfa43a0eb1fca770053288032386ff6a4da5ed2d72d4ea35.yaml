@@ -24,6 +24,11 @@ batch_read_ranges:
     - 10000-10050
     - 10090-10156
     - 10208-10265
+    # Stops at 32774: 0x8007 (parallel_capability_mask) is read on its own
+    # instead. A batch that spans it gets a silent zero appended by firmware
+    # that does not implement 0x8007, while a single-register read of the same
+    # address correctly answers Illegal Data Address -- so batching it makes an
+    # unimplemented mask indistinguishable from a device reporting "no features".
     - 32768-32774
   holding:
     - 10060-10072
@@ -252,6 +257,26 @@ read_quantities:
     value_mapping:
       0: "disabled"
       1: "enabled"
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 3
+    internal: true
+
+  # Parallel machine capability negotiation register
+  # BIT0: charging_limit_soc supported
+  # BIT1: discharge_limit_soc supported
+  # BIT2: backup_reserve_soc supported
+  # BIT3: backup_soc_enable supported
+  parallel_capability_mask:
+    translation_key: "parallel_capability_mask"
+    address: 0x8007
+    # Required: this address sits outside batch_read_ranges on purpose, so it is
+    # fetched by a single read that needs an explicit function code (FC04).
+    register_type: "input"
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    icon: "mdi:feature-search"
     internal: true
 
 # =======================================================================
@@ -360,6 +385,8 @@ control_items:
     min_value: 80
     max_value: 100
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 0
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -380,6 +407,8 @@ control_items:
     min_value: 0
     max_value: 20
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 1
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -399,6 +428,8 @@ control_items:
     min_value: 0
     max_value: 100
     step: 1
+    capability_entity: "parallel_capability_mask"
+    capability_bit: 2
     soc_validation:
       condition_entity: "backup_soc_enable"
       condition_value: 1
@@ -415,7 +446,7 @@ control_items:
 # =============================================================================
 #
 # 1. All entity names are defined using translation_key
-# 2. Translations are maintained in translations/en.json and translations/zh-Hans.json
+# 2. Translations are maintained in translations/en.json
 # 3. Read Quantities Configuration (read_quantities):
 #    - Define all sensor type data points
 #    - Include address, data type, unit, gain and other information

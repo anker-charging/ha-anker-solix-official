@@ -59,12 +59,98 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
         """Return if entity is available."""
         if not self.coordinator.is_connected():
             return False
-        
-        if self._register_address is not None:
-            if not self.coordinator.is_register_available(self._register_address):
-                return False
-        
+
+        self._log_unreadable_register(self._register_address)
+
         return True
+
+    def _log_unreadable_register(self, address: int | None, role: str = "own") -> None:
+        """Log a register read failure without hiding the entity.
+
+        A read failure must NEVER hide an entity. Whether a feature is supported
+        is decided ONLY by `_is_capability_supported`, and only when the mask was
+        read successfully and the bit is confirmed unset. An address the firmware
+        rejects tells us nothing about support -- it may be unimplemented on this
+        build, or temporarily rejected -- so hiding on it would remove controls
+        that a capable device is willing to write.
+        """
+        if address is None or self.coordinator.is_register_available(address):
+            return
+        _LOGGER.debug(
+            "Entity %s: %s register %d (0x%04X) could not be read "
+            "(device rejected the address, e.g. Illegal Data Address) - "
+            "entity stays VISIBLE, support is decided by the capability mask only",
+            self._entity_key,
+            role,
+            address,
+            address,
+        )
+
+    def _is_capability_supported(self) -> bool:
+        """Check capability_entity + capability_bit gate (parallel machine capability negotiation).
+
+        Only hides an entity when the mask was READ SUCCESSFULLY and the bit is
+        confirmed unset. Every "cannot tell yet" case fails open, because a
+        mask that could not be read is indistinguishable from a mask of 0 once
+        a default value has been substituted -- 0x8007 answers Illegal Data
+        Address on some firmware, which previously hid Backup Reserve /
+        Charging Limit on devices that do support them.
+        """
+        capability_entity = self._config.get("capability_entity")
+        capability_bit = self._config.get("capability_bit")
+        if not capability_entity or capability_bit is None:
+            return True
+
+        mask_address = self.coordinator.get_data_point_address(capability_entity)
+
+        if not self.coordinator.data or capability_entity not in self.coordinator.data:
+            _LOGGER.debug(
+                "Capability gate: %s VISIBLE (fail-open) - mask '%s' (address %s) "
+                "was not read this cycle, so support is unknown",
+                self._entity_key,
+                capability_entity,
+                mask_address,
+            )
+            return True
+
+        if mask_address is not None and not self.coordinator.is_register_available(
+            mask_address
+        ):
+            _LOGGER.debug(
+                "Capability gate: %s VISIBLE (fail-open) - mask '%s' register %d "
+                "is marked unavailable (read failed, e.g. Illegal Data Address)",
+                self._entity_key,
+                capability_entity,
+                mask_address,
+            )
+            return True
+
+        mask_value = self.coordinator.data.get(capability_entity)
+        try:
+            mask = int(mask_value)
+        except (ValueError, TypeError):
+            _LOGGER.debug(
+                "Capability gate: %s VISIBLE (fail-open) - mask '%s' value %r is "
+                "not an integer",
+                self._entity_key,
+                capability_entity,
+                mask_value,
+            )
+            return True
+
+        result = bool(mask & (1 << capability_bit))
+        _LOGGER.debug(
+            "Capability gate: %s %s - mask '%s' (address %s) read successfully as "
+            "0x%04X, bit %d is %s",
+            self._entity_key,
+            "VISIBLE" if result else "HIDDEN (device reports feature unsupported)",
+            capability_entity,
+            mask_address,
+            mask,
+            capability_bit,
+            "set" if result else "unset",
+        )
+        return result
 
     def _get_raw_value(self, default: Any = None) -> Any:
         """Get raw value from coordinator data.
@@ -94,8 +180,18 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
             return default
         return self.coordinator.data.get(self._entity_key, default)
 
-    def _check_write_condition(self) -> tuple[bool, str | None]:
+    def _check_write_condition(
+        self, for_write: bool = True
+    ) -> tuple[bool, str | None]:
         """Check write_condition before writing.
+
+        Args:
+            for_write: True when a user action is being validated, so a blocked
+                condition is worth a warning. False when called from a read-only
+                property such as `native_value`, which Home Assistant evaluates
+                on every state refresh -- warning there repeats forever on any
+                device whose condition register is unreadable, burying real
+                write failures.
 
         Returns:
             (passed, hint_translation_key)
@@ -104,8 +200,10 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
         if not condition:
             return True, None
 
+        log = _LOGGER.warning if for_write else _LOGGER.debug
+
         if not self.coordinator.data:
-            _LOGGER.warning(
+            log(
                 "Write condition check failed for %s: coordinator.data is None",
                 self._entity_key,
             )
@@ -117,7 +215,7 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
 
         current_value = self.coordinator.data.get(entity_key)
         if current_value is None:
-            _LOGGER.warning(
+            log(
                 "Write condition check failed for %s: entity '%s' not found in coordinator.data (available keys: %s)",
                 self._entity_key,
                 entity_key,
@@ -128,7 +226,7 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
         try:
             current_value = float(current_value)
         except (ValueError, TypeError):
-            _LOGGER.warning(
+            log(
                 "Write condition check failed for %s: cannot convert '%s' to float",
                 self._entity_key,
                 current_value,
@@ -318,6 +416,7 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
             "dismiss",
             {"notification_id": notification_id},
         )
+
 
 
 async def async_setup_entities_with_retry(

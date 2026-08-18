@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Build zip
+        run: |
+          cd custom_components/anker_solix_official
+          zip -r "$GITHUB_WORKSPACE/anker_solix_official.zip" . \
+            -x '*/__pycache__/*' '__pycache__/*' '*.pyc' '.DS_Store' '*/.DS_Store'
+          cd "$GITHUB_WORKSPACE"
+          unzip -l anker_solix_official.zip | grep -q 'manifest.json' || exit 1
+
+      - name: Upload zip to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release upload "${{ github.event.release.tag_name }}"
+          anker_solix_official.zip --clobber --repo "${{ github.repository }}"

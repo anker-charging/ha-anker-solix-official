@@ -260,8 +260,8 @@
       "battery_power_direction": {
         "name": "Flux de puissance",
         "state": {
-          "charge": "Prélèvement réseau",
-          "discharge": "Injection réseau"
+          "charge": "Puissance de charge réseau-batterie",
+          "discharge": "Puissance de sortie du port réseau"
         }
       },
       "export_power_control": {
@@ -285,7 +285,7 @@
         "name": "Consigne charge/décharge batterie"
       },
       "battery_power_setpoint": {
-        "name": "Puissance de consigne"
+        "name": "Contrôle de puissance"
       },
       "charging_limit_soc": {
         "name": "Limite supérieure de charge"

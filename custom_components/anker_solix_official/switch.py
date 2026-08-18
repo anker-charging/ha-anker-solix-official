@@ -79,13 +79,12 @@ class AnkerSolixSwitch(AnkerSolixBaseEntity, SwitchEntity):
 
         if self._read_entity_key is not None:
             read_address = self.coordinator.get_data_point_address(self._read_entity_key)
-            if read_address is not None:
-                if not self.coordinator.is_register_available(read_address):
-                    return False
+            self._log_unreadable_register(read_address, role="status")
 
-        if self._register_address is not None:
-            if not self.coordinator.is_register_available(self._register_address):
-                return False
+        self._log_unreadable_register(self._register_address)
+
+        if not self._is_capability_supported():
+            return False
 
         return True
 
@@ -253,14 +252,16 @@ class AnkerSolixSwitch(AnkerSolixBaseEntity, SwitchEntity):
 
                 dlog.info("📝 %s %s → %s", device_name, entity_name, state_display)
             else:
-                dlog.error(
+                log_fn = dlog.warning if result.is_transient else dlog.error
+                log_fn(
                     "Write switch FAILED | entity=%s, state='%s', value=%d, address=%d (0x%04X), "
-                    "reason=%s, raw_response=%s, tx_frame=%s",
+                    "is_transient=%s, reason=%s, raw_response=%s, tx_frame=%s",
                     self._entity_key,
                     state_name,
                     value,
                     address,
                     address,
+                    result.is_transient,
                     result.error_reason,
                     result.raw_response or "N/A",
                     result.tx_frame or "N/A",
