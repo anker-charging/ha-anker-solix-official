@@ -126,8 +126,8 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
         data_type = config.get("data_type", "")
         unit = config.get("unit", "")
 
-        # Skip unit/device_class setup for STRING type
-        if data_type == "STRING":
+        # Skip unit/device_class setup for non-numeric types (STRING, VERSION)
+        if data_type in ("STRING", "VERSION"):
             return
 
         # Skip unit/device_class for power_direction_format (returns formatted string)
