@@ -103,6 +103,9 @@ class TestGetClient:
         manager = _initialized_manager(_FakeClient(connected=True))
         result = await manager.get_client()
         assert result is manager._client
+        # Cancel the idle-cleanup background task spawned on successful
+        # connect, otherwise the harness fails the teardown cleanup check.
+        await manager.disconnect()
 
     async def test_disconnected_client_attempts_reconnect(self) -> None:
         # Arrange
@@ -115,6 +118,10 @@ class TestGetClient:
         # Assert
         assert result is fake
         assert fake.connected is True
+
+        # Cancel the idle-cleanup background task spawned on successful
+        # connect, otherwise the harness fails the teardown cleanup check.
+        await manager.disconnect()
 
     async def test_failed_reconnect_returns_none(self) -> None:
         fake = _FakeClient(connected=False, connect_results=[False])
