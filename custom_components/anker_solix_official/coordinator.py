@@ -982,8 +982,8 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                             and self.device_info.get("model") != "--"
                         ):
                             dev_reg = dr.async_get(self.hass)
-                            device = dev_reg.async_get_device(
-                                identifiers={(DOMAIN, self.entry.entry_id)}
+                            device = dev_reg.async_get_device_by_identifier(
+                                (DOMAIN, self.entry.entry_id)
                             )
                             if device:
                                 dev_reg.async_update_device(
