@@ -28,8 +28,6 @@ This integration is built for select Anker Solix products, designed to take full
 | Anker SOLIX Smart Plug Gen 2 | Firmware 0.0.8.4+ |
 | Anker SOLIX Solarbank Max AC | All Firmware Versions |
 | Anker SOLIX XE AC | All Firmware Versions |
-| Anker SOLIX Solarbank Max | All Firmware Versions |
-| Anker SOLIX XE | All Firmware Versions |
 | Anker SOLIX Solarbank 4 E5000 Pro | All Firmware Versions |
 | Anker SOLIX Smart Meter Gen 2 | All Firmware Versions |
 
