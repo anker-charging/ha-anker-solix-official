@@ -867,6 +867,37 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
             throttle_key=f"{phase}_changes",
         )
 
+    def _update_device_registry_info(self) -> None:
+        """Push the current detected model/manufacturer/name into the device registry.
+
+        Uses `async_get_device_by_identifier` when available (HA core >= 2026.8.0),
+        falling back to the deprecated `async_get_device` on older HA versions where
+        the new API does not exist yet. `async_get_device` is scheduled for removal
+        in HA 2027.8.0 (see home-assistant/core deprecation notice), but remains
+        functional (warning-only for custom integrations) on every HA version this
+        integration currently supports (min HA version per hacs.json: 2024.1.6).
+        """
+        dev_reg = dr.async_get(self.hass)
+        if hasattr(dev_reg, "async_get_device_by_identifier"):
+            device = dev_reg.async_get_device_by_identifier(
+                (DOMAIN, self.entry.entry_id), self.entry.entry_id
+            )
+        else:
+            device = dev_reg.async_get_device(
+                identifiers={(DOMAIN, self.entry.entry_id)}
+            )
+        if device:
+            dev_reg.async_update_device(
+                device_id=device.id,
+                manufacturer=self.device_info.get("manufacturer", "Anker"),
+                model=self.device_info.get("model"),
+                name=self.device_info.get("name"),
+            )
+            self.logger.info(
+                "Device registry updated with model: %s",
+                self.device_info.get("model"),
+            )
+
     async def _connection_loop(self) -> None:
         """Unified background loop: retry connect every 10s until a successful data read, then poll at scan interval."""
         if self._initial_mdns_sn and not self._ever_connected:
@@ -981,23 +1012,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                             self.device_info.get("model")
                             and self.device_info.get("model") != "--"
                         ):
-                            dev_reg = dr.async_get(self.hass)
-                            device = dev_reg.async_get_device(
-                                identifiers={(DOMAIN, self.entry.entry_id)}
-                            )
-                            if device:
-                                dev_reg.async_update_device(
-                                    device_id=device.id,
-                                    manufacturer=self.device_info.get(
-                                        "manufacturer", "Anker"
-                                    ),
-                                    model=self.device_info.get("model"),
-                                    name=self.device_info.get("name"),
-                                )
-                                self.logger.info(
-                                    "Device registry updated with model: %s",
-                                    self.device_info.get("model"),
-                                )
+                            self._update_device_registry_info()
                     except Exception as e:
                         self.logger.debug("Failed to update device registry: %s", e)
                     if not self._ever_connected:

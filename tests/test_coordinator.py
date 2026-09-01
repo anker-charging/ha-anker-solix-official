@@ -1222,6 +1222,100 @@ class TestUpdateUnavailableRegisters:
         await coordinator._update_unavailable_registers()  # must not raise
 
 
+class TestUpdateDeviceRegistryInfo:
+    """_update_device_registry_info() version-safe device registry sync.
+
+    Regression coverage for the deprecated `device_registry.async_get_device`
+    call (see PR #119 / issue #115): `async_get_device_by_identifier` requires
+    two positional args (`identifier`, `config_entry_id`) and only exists on
+    HA core >= 2026.8.0, so the coordinator must probe for it via `hasattr`
+    rather than calling it unconditionally.
+    """
+
+    async def test_uses_new_api_when_available_with_both_required_args(
+        self, hass, coordinator
+    ) -> None:
+        from homeassistant.helpers import device_registry as dr
+
+        dev_reg = dr.async_get(hass)
+        device = dev_reg.async_get_or_create(
+            config_entry_id=coordinator.entry.entry_id,
+            identifiers={(DOMAIN, coordinator.entry.entry_id)},
+            manufacturer="Anker",
+            model="--",
+            name="Old Name",
+        )
+        coordinator.device_info["manufacturer"] = "Anker"
+        coordinator.device_info["model"] = "Solarbank Max AC"
+        coordinator.device_info["name"] = "New Name"
+
+        calls: list[tuple] = []
+        original = dev_reg.async_get_device_by_identifier if hasattr(
+            dev_reg, "async_get_device_by_identifier"
+        ) else None
+
+        def fake_get_device_by_identifier(identifier, config_entry_id):
+            calls.append((identifier, config_entry_id))
+            return device
+
+        dev_reg.async_get_device_by_identifier = fake_get_device_by_identifier
+        try:
+            coordinator._update_device_registry_info()
+        finally:
+            if original is None:
+                del dev_reg.async_get_device_by_identifier
+            else:
+                dev_reg.async_get_device_by_identifier = original
+
+        # Both required positional args must be passed - this is exactly the
+        # bug in PR #119, which only passed `identifier`.
+        assert calls == [
+            ((DOMAIN, coordinator.entry.entry_id), coordinator.entry.entry_id)
+        ]
+        updated = dev_reg.async_get_device(
+            identifiers={(DOMAIN, coordinator.entry.entry_id)}
+        )
+        assert updated.model == "Solarbank Max AC"
+        assert updated.name == "New Name"
+
+    async def test_falls_back_to_deprecated_api_when_new_api_absent(
+        self, hass, coordinator
+    ) -> None:
+        """Simulates HA core < 2026.8.0, where the new method doesn't exist."""
+        from homeassistant.helpers import device_registry as dr
+
+        dev_reg = dr.async_get(hass)
+        device = dev_reg.async_get_or_create(
+            config_entry_id=coordinator.entry.entry_id,
+            identifiers={(DOMAIN, coordinator.entry.entry_id)},
+            manufacturer="Anker",
+            model="--",
+            name="Old Name",
+        )
+        coordinator.device_info["manufacturer"] = "Anker"
+        coordinator.device_info["model"] = "Solarbank Max AC"
+        coordinator.device_info["name"] = "New Name"
+
+        # Current pytest-homeassistant-custom-component's DeviceRegistry has
+        # no async_get_device_by_identifier at all, so this is already the
+        # fallback path by default - just assert it works end to end.
+        assert not hasattr(dev_reg, "async_get_device_by_identifier")
+
+        coordinator._update_device_registry_info()  # must not raise
+
+        updated = dev_reg.async_get_device(
+            identifiers={(DOMAIN, coordinator.entry.entry_id)}
+        )
+        assert updated.model == "Solarbank Max AC"
+        assert updated.name == "New Name"
+
+    async def test_no_op_when_device_not_registered(self, hass, coordinator) -> None:
+        # No device_registry entry exists for this entry_id - must not raise.
+        coordinator.device_info["model"] = "Solarbank Max AC"
+
+        coordinator._update_device_registry_info()  # must not raise
+
+
 class TestAsyncShutdown:
     """async_shutdown() full teardown sequence."""
 
