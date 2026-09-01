@@ -7,16 +7,19 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, CoreState
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers import device_registry as dr
 
-from .const import DOMAIN, SCAN_INTERVAL, LOG_THROTTLE_INTERVAL, CONNECTION_RETRY_DELAY
+from .const import (
+    DOMAIN,
+    EMPTY_FRAME_TOLERANCE,
+    LOG_THROTTLE_INTERVAL,
+    SCAN_INTERVAL,
+)
 from .modbus_manager import ModbusConnectionManager
 from .device_config import AnkerSolixDeviceConfig
 from .config_utils import parse_device_configuration
-from .async_resource_manager import AsyncResourceManager
 from .throttled_logger import ThrottledLogger
 from .product_mapping import get_product_name_from_config
 from .device_logger import DeviceLoggerAdapter
@@ -70,21 +73,13 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         self._full_config_cache = (
             None  # Store full YAML config (including product_info)
         )
-        # Background connection/data loop
-        self._bg_task = None
-        self._stop_bg = False
-        self._status = "disconnected"  # disconnected | connecting | connected
         self._latest_data: dict[str, Any] = {}
         self._selected_config_file: str | None = None
         self._ever_connected: bool = False
         # Persistent flag: True once the initial auto-mode-set has been
         # successfully delivered (or device was already in target mode).
-        # Stored in entry.options so it survives HA restarts without
-        # triggering an entry reload (unlike entry.data).
+        # Stored in entry.options so it survives HA restarts.
         self._initial_mode_sent: bool = entry.options.get("initial_mode_sent", False)
-
-        # Use async resource manager for background task management
-        self._resource_manager = AsyncResourceManager()
 
         # Write protection: protect specific entity values after write operations
         # This prevents the UI from "flashing back" when device is still processing
@@ -104,14 +99,10 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
         self._unavailable_registers: set[int] = set()
 
-        # Connection state tracking (initialize before reading device model)
-        self._connection_failed = False
-        self._last_connection_attempt = 0
-        self._connection_retry_interval = CONNECTION_RETRY_DELAY
+        # Consecutive failure count is kept only to drive the mDNS re-discovery
+        # trigger; retry scheduling itself belongs to DataUpdateCoordinator.
         self._consecutive_failures = 0
-        self._device_unavailable_logged = (
-            False  # HA best practice: log once on unavailable
-        )
+        self._empty_frames = 0
         self._mdns_lookup_done = False
         self._last_mdns_lookup = 0
 
@@ -130,51 +121,14 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
             "model": device_model,  # Read from device, just like manufacturer
         }
 
-        # Start background loop: start immediately if HA is running, otherwise wait for HA startup completion
-        def _start_bg(event=None):
-            try:
-                # Create task in thread-safe context to avoid creating coroutine objects in non-event loop threads
-                def _spawn_task():
-                    try:
-                        if not self._bg_task or self._bg_task.done():
-                            # Use resource manager to track background task
-                            self._bg_task = self._resource_manager.create_task(
-                                self._connection_loop(), name="connection_loop"
-                            )
-                    except Exception:
-                        pass
-
-                # Prefer thread-safe scheduling using the main event loop
-                if (
-                    hasattr(self.hass, "loop")
-                    and self.hass.loop
-                    and self.hass.loop.is_running()
-                ):
-                    try:
-                        self.hass.loop.call_soon_threadsafe(_spawn_task)
-                    except Exception:
-                        _spawn_task()
-                else:
-                    # Fallback: try directly if loop is unavailable (usually in event loop thread)
-                    _spawn_task()
-            except Exception:
-                pass
-
-        try:
-            if (
-                getattr(self.hass, "is_running", False)
-                or getattr(self.hass, "state", None) == CoreState.running
-            ):
-                _start_bg()
-            else:
-                self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _start_bg)
-        except Exception:
-            # Fallback: start directly
-            _start_bg()
-
     def is_connected(self) -> bool:
-        """Public connection state for entities."""
-        return self._status == "connected" and not self._connection_failed
+        """Public connection state for entities.
+
+        Derived from the outcome of the most recent refresh rather than a
+        separately maintained flag, so a coordinator that has stopped polling
+        cannot keep reporting itself as connected (issue #117).
+        """
+        return self.last_update_success
 
     def set_write_protection(
         self, entity_key: str, protected_value: Any, duration: float | None = None
@@ -266,7 +220,8 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         This method extracts product code from SN and replaces the raw PN
         (e.g., "AE103") with friendly name (e.g., "Solarbank 4 E5000 Pro").
 
-        Called BEFORE async_set_updated_data to ensure sensor displays friendly names.
+        Called from _async_update_data before the frame is returned, so the
+        coordinator publishes the friendly name from the very first frame.
 
         Args:
             data: Data dictionary to modify in-place
@@ -615,11 +570,9 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
     async def _apply_mdns_ip_update(self, new_ip: str) -> None:
         """Update in-memory connection target after mDNS resolves a new IP.
 
-        Not persisted to entry.data: persisting would trigger the config
-        entry update listener (_async_update_listener in __init__.py),
-        tearing down and rebuilding the whole integration on every
-        automatic IP switch. The startup mDNS check re-discovers the
-        current IP on every HA restart, so persistence is unnecessary.
+        Not persisted to entry.data: the startup mDNS check re-discovers the
+        current IP on every setup, so persistence is unnecessary, and writing
+        entry.data here would needlessly mutate the config entry mid-run.
         """
         self.logger.info(
             "mDNS: IP changed %s → %s, updating connection target",
@@ -636,15 +589,12 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         await self.modbus_manager.update_ip_address(new_ip)
 
     async def _async_startup_mdns_check(self) -> None:
-        """Background mDNS lookup at startup; only applies if still disconnected.
+        """Resolve the device's current IP via mDNS before the first connect.
 
-        Scheduled as a fire-and-forget task from _connection_loop so it
-        runs concurrently with the first connection attempt instead of
-        delaying it — a still-working configured IP must never be held
-        up by an unconditional mDNS scan. Only applies the discovered IP
-        if the initial connection attempt has not already succeeded by
-        the time mDNS resolves (self._ever_connected), otherwise the
-        currently-working IP is left untouched.
+        Awaited from the connect step so a device whose DHCP lease moved is found on
+        the very first refresh. Only applies the discovered IP when the configured
+        one has not already worked (self._ever_connected), so a currently-working
+        IP is left untouched.
         """
         if not self._initial_mdns_sn:
             return
@@ -654,11 +604,11 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         await self._apply_mdns_ip_update(new_ip)
 
     async def _maybe_mdns_lookup(self) -> None:
-        """Attempt mDNS lookup to find device's new IP after connection failures.
+        """Attempt mDNS lookup to find device's new IP after refresh failures.
 
         Triggers when:
         - 3 consecutive failures (first time)
-        - Every 60s after that (aligned with backoff interval)
+        - Every 55s after that (rate limit)
 
         Does NOT trigger if:
         - unique_id is not a SN (can't search without SN)
@@ -688,70 +638,31 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         await self._apply_mdns_ip_update(new_ip)
 
         self._consecutive_failures = 0
-        self._connection_retry_interval = CONNECTION_RETRY_DELAY
-        self._device_unavailable_logged = False
 
-    def _should_attempt_reconnection(self) -> bool:
-        """Check if reconnection should be attempted."""
-        current_time = time.time()
+    async def _handle_refresh_failure(self, error_msg: str) -> None:
+        """React to a failed refresh: drop the socket and consider mDNS re-discovery.
 
-        # If connection is normal, no need to reconnect
-        if not self._connection_failed:
-            return False
-
-        # Check reconnection interval first (most important for quick recovery)
-        time_since_last_attempt = current_time - self._last_connection_attempt
-        if time_since_last_attempt < self._connection_retry_interval:
-            return False
-
-        return True
-
-    async def _handle_connection_failure(self, error_msg: str):
-        """Handle connection failure with HA best-practice logging.
-
-        HA Integration Quality Scale rule 'log-when-unavailable':
-        Log once at INFO when device becomes unavailable, then stay silent.
-        Log once at INFO when device comes back online.
+        Deliberately does NOT schedule retries or mark entities unavailable --
+        DataUpdateCoordinator owns retry timing and `last_update_success`. It
+        does clear `self.data` directly (not via async_set_updated_data, which
+        would reset last_update_success back to True): DataUpdateCoordinator
+        leaves `self.data` at its last successful value when `_async_update_data`
+        raises, so anything reading coordinator.data without checking
+        last_update_success first -- e.g. write-condition gates in
+        base_entity.py -- would otherwise see stale pre-outage values.
         """
-        current_time = time.time()
         self._consecutive_failures += 1
-        self._last_failure_time = current_time
-        self._connection_failed = True
-        self._status = "disconnected"
         self._latest_data = {}
+        self.data = {}
 
-        # Immediately notify HA that data is no longer valid
-        # This makes entities show "unavailable" instead of stale values
-        self.async_set_updated_data({})
-
-        # Force disconnect modbus connection to ensure clean reconnection
         try:
             await self.modbus_manager.force_disconnect()
         except Exception as e:
             self.logger.debug("Error during force disconnect: %s", e)
 
-        # HA best practice: log only ONCE when device becomes unavailable
-        if not self._device_unavailable_logged:
-            self.logger.info(
-                "Device %s is unavailable: %s (will retry with backoff)",
-                self.ip_address,
-                error_msg,
-            )
-            self._device_unavailable_logged = True
-        else:
-            self.logger.debug(
-                "Connection failure #%d: %s", self._consecutive_failures, error_msg
-            )
-
-        # Exponential backoff: 10s → 30s → 60s → 300s (max)
-        if self._consecutive_failures <= 3:
-            self._connection_retry_interval = CONNECTION_RETRY_DELAY  # 10s
-        elif self._consecutive_failures <= 10:
-            self._connection_retry_interval = 30
-        elif self._consecutive_failures <= 30:
-            self._connection_retry_interval = 60
-        else:
-            self._connection_retry_interval = 300
+        self.logger.debug(
+            "Refresh failure #%d: %s", self._consecutive_failures, error_msg
+        )
 
         await self._maybe_mdns_lookup()
 
@@ -828,12 +739,11 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
     ) -> None:
         """Log data update details with consistent verbosity."""
         total = len(data) if data else 0
-        phase_label = f"[bg] {phase}"
 
         if phase == "initial":
-            self.logger.info("%s data fetch succeeded (%d points)", phase_label, total)
+            self.logger.info("%s data fetch succeeded (%d points)", phase, total)
         else:
-            self.logger.debug("%s data fetch succeeded (%d points)", phase_label, total)
+            self.logger.debug("%s data fetch succeeded (%d points)", phase, total)
 
         if not data:
             return
@@ -842,7 +752,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         if sample_keys:
             sample_pairs = ", ".join(f"{key}={data.get(key)}" for key in sample_keys)
             suffix = ", ..." if total > len(sample_keys) else ""
-            self.logger.debug("%s sample: %s%s", phase_label, sample_pairs, suffix)
+            self.logger.debug("%s sample: %s%s", phase, sample_pairs, suffix)
 
         if not old_data:
             return
@@ -853,7 +763,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
             if old_data.get(key) != value
         ]
         if not changed:
-            self.logger.debug("%s data unchanged from previous snapshot", phase_label)
+            self.logger.debug("%s data unchanged from previous snapshot", phase)
             return
 
         summary = "; ".join(changed[:3])
@@ -862,7 +772,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
         self._throttled_logger.debug(
             "%s changes detected: %s",
-            phase_label,
+            phase,
             summary,
             throttle_key=f"{phase}_changes",
         )
@@ -898,252 +808,133 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                 self.device_info.get("model"),
             )
 
-    async def _connection_loop(self) -> None:
-        """Unified background loop: retry connect every 10s until a successful data read, then poll at scan interval."""
-        if self._initial_mdns_sn and not self._ever_connected:
-            self._resource_manager.create_task(
-                self._async_startup_mdns_check(), name="startup_mdns_check"
+    async def _load_device_configuration(self) -> dict[str, Any]:
+        """Resolve the device's PN, load its YAML config and parse it into caches.
+
+        Returns the parsed data_points, or an empty dict when the device could
+        not be identified or its config file is missing/unusable.
+        """
+        config_file = await self._get_config_file_path()
+        if not config_file:
+            return {}
+
+        self._selected_config_file = config_file
+        cfg = await self.device_config.load_device_config_by_file_async(config_file)
+        if not (cfg and isinstance(cfg, dict)):
+            return {}
+
+        data_points, batch_ranges = parse_device_configuration(cfg)
+        if not data_points:
+            return {}
+
+        self._full_config_cache = cfg
+        self._device_config_cache = data_points
+        self._batch_ranges_cache = batch_ranges
+        self._config_cache_valid = True
+        return data_points
+
+    async def _async_connect_and_ensure_config(self) -> None:
+        """Connect and make sure the device configuration is loaded.
+
+        Called from _async_update_data rather than from DataUpdateCoordinator's
+        `_async_setup` hook: that hook only exists from HA core 2024.8.0, while
+        hacs.json still declares 2024.1.6 as the minimum supported version, so
+        relying on it would silently skip this step on older installs.
+        Loading is guarded by the config cache, so the work really happens once.
+        """
+        client = await self.modbus_manager.get_client()
+        if client is None and self._initial_mdns_sn and not self._ever_connected:
+            # Only scan once the configured IP has actually failed: a working IP
+            # must never be delayed by an unconditional mDNS lookup.
+            await self._async_startup_mdns_check()
+            client = await self.modbus_manager.get_client()
+        if client is None:
+            raise UpdateFailed(f"Cannot connect to device at {self.ip_address}")
+
+        if self._is_config_cache_valid():
+            return
+
+        # The device needs a moment after connect before it answers reliably.
+        await asyncio.sleep(0.7)
+
+        if not await self._load_device_configuration():
+            raise UpdateFailed(
+                f"Could not load a device configuration for {self.ip_address}"
             )
 
-        while not self._stop_bg:
-            self.logger.debug("[bg] Background loop iteration starting")
-            try:
-                if self._status != "connected":
-                    # Retry every 10s until we can both connect and fetch data
-                    if not self._ever_connected:
-                        self.logger.info("[bg] Connection attempt starting")
-                    else:
-                        self.logger.debug("[bg] Reconnection attempt starting")
-                    # Test connection using device-specific modbus manager
-                    client = await self.modbus_manager.get_client()
-                    connected = client is not None
-                    if not connected:
-                        await self._handle_connection_failure("[bg] modbus_manager.get_client() failed")
-                        await asyncio.sleep(self._connection_retry_interval)
-                        continue
+    async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch one full frame of device data.
 
-                    # Connected: ensure config
-                    if not self._is_config_cache_valid():
-                        # Dynamic configuration file based on device PN
-                        await asyncio.sleep(0.7)
-                        config_file = await self._get_config_file_path()
-                        if not config_file:
-                            await self._handle_connection_failure("[bg] Failed to determine config file path")
-                            await asyncio.sleep(self._connection_retry_interval)
-                            continue
-                        self._selected_config_file = config_file
-                        # Load config file (no extra TCP used)
-                        cfg = await self.device_config.load_device_config_by_file_async(
-                            config_file
-                        )
-                        if cfg and isinstance(cfg, dict):
-                            # Store full config (including product_info)
-                            self._full_config_cache = cfg
-                            # Build unified data_points from configuration using utility function
-                            data_points, batch_ranges = parse_device_configuration(cfg)
-                            if data_points:
-                                self._device_config_cache = data_points
-                                self._batch_ranges_cache = batch_ranges
-                                self._config_cache_valid = True
-                            else:
-                                await self._handle_connection_failure("[bg] parsed config has no data_points")
-                                await asyncio.sleep(self._connection_retry_interval)
-                                continue
-                        else:
-                            await self._handle_connection_failure("[bg] load device config file failed")
-                            await asyncio.sleep(self._connection_retry_interval)
-                            continue
+        Raises UpdateFailed on any read problem; DataUpdateCoordinator translates
+        that into last_update_success=False and schedules the next attempt. On the
+        first call (via async_config_entry_first_refresh) that becomes
+        ConfigEntryNotReady, so HA owns the retry schedule.
+        """
+        try:
+            await self._async_connect_and_ensure_config()
 
-                    # Try one data fetch to validate using the device-specific connection
+            data = await self.modbus_manager.get_all_data(
+                self._device_config_cache,
+                batch_ranges=self._batch_ranges_cache,
+            )
+            await self._update_unavailable_registers()
+
+            if not data:
+                # Modbus TCP drops the occasional frame. Failing on the first one
+                # would flip every entity to unavailable and back within one scan
+                # interval, so a few misses are ridden out on the last good frame
+                # (the pre-refactor loop tolerated the same number). Still counted
+                # against _consecutive_failures so mDNS re-discovery (gated on 3
+                # consecutive problem reads) triggers at the same point as before,
+                # rather than only once the tolerance window on top is exhausted.
+                if self._latest_data and self._empty_frames < EMPTY_FRAME_TOLERANCE:
+                    self._empty_frames += 1
+                    self._consecutive_failures += 1
                     self.logger.debug(
-                        "[bg] Attempting initial data fetch with %d data points",
-                        len(self._device_config_cache)
-                        if self._device_config_cache
-                        else 0,
+                        "Empty data frame from %s (%d/%d tolerated), keeping last values",
+                        self.ip_address,
+                        self._empty_frames,
+                        EMPTY_FRAME_TOLERANCE,
                     )
-                    data = await self.modbus_manager.get_all_data(
-                        self._device_config_cache,
-                        batch_ranges=self._batch_ranges_cache,
-                        use_batch_optimization=True,
-                    )
-                    await self._update_unavailable_registers()
-                    if not data:
-                        # Treat as failure
-                        self.logger.warning(
-                            "[bg] initial data fetch returned empty data"
-                        )
-                        await self._handle_connection_failure("[bg] initial data fetch returned empty")
-                        await asyncio.sleep(self._connection_retry_interval)
-                        continue
+                    return self._latest_data
+                raise UpdateFailed(f"Empty data frame from {self.ip_address}")
+        except UpdateFailed as err:
+            await self._handle_refresh_failure(str(err))
+            raise
+        except Exception as err:
+            await self._handle_refresh_failure(str(err))
+            raise UpdateFailed(f"Error reading from {self.ip_address}: {err}") from err
 
-                    # Success: mark connected and push data
-                    self._handle_connection_success()
-                    self._status = "connected"
+        self._empty_frames = 0
 
-                    # IMPORTANT: Override model sensor value BEFORE publishing data
-                    # This ensures sensor entities also display friendly product names
-                    self._override_model_with_product_name(data)
-                    self._inject_version_gates(data)
+        # Model name must be overridden before the frame is published so sensors
+        # and the device registry show the friendly product name from frame one.
+        self._override_model_with_product_name(data)
+        self._inject_version_gates(data)
 
-                    # Auto-set operating mode only on the very first ever connect.
-                    # _initial_mode_sent is persisted to entry.options, so HA restarts
-                    # and reconnections do NOT trigger this again.
-                    if not self._initial_mode_sent:
-                        await self._auto_set_mode_on_connect(data)
+        if not self._initial_mode_sent:
+            await self._auto_set_mode_on_connect(data)
 
-                    # Log data comparison for debugging
-                    old_data = self._latest_data.copy() if self._latest_data else None
-                    self._latest_data = data
-                    self._log_data_update("initial", data, old_data)
+        old_data = self._latest_data.copy() if self._latest_data else None
+        self._latest_data = data
+        self._log_data_update("periodic" if self._ever_connected else "initial", data, old_data)
 
-                    # Publish data to Home Assistant (data already has overridden model name)
-                    self.async_set_updated_data(data)
-
-                    self.logger.debug(
-                        "[bg] Data published to Home Assistant via async_set_updated_data"
-                    )
-
-                    # Reset consecutive failures on successful reconnection
-                    self._consecutive_failures = 0
-
-                    # Update device registry (async, non-blocking)
-                    try:
-                        if (
-                            self.device_info.get("model")
-                            and self.device_info.get("model") != "--"
-                        ):
-                            self._update_device_registry_info()
-                    except Exception as e:
-                        self.logger.debug("Failed to update device registry: %s", e)
-                    if not self._ever_connected:
-                        self._ever_connected = True
-                        self.logger.info(
-                            "[bg] Connection successful, data fetched and published"
-                        )
-                    else:
-                        self.logger.info(
-                            "[bg] Reconnection successful, data fetched and published"
-                        )
-
-                # If connected, poll at scan interval
-                self.logger.debug(
-                    "[bg] Sleeping for %d seconds before next read", self.scan_interval
-                )
-                await asyncio.sleep(self.scan_interval)
-                self.logger.debug("[bg] Sleep completed, checking if should read data")
-
-                # Periodic read
-                self.logger.debug(
-                    "[bg] Status check: connected=%s, config_valid=%s",
-                    self._status == "connected",
-                    self._is_config_cache_valid(),
-                )
-
-                if self._status == "connected":
-                    if not self._is_config_cache_valid():
-                        self.logger.info(
-                            "[bg] Config cache expired, reloading configuration"
-                        )
-                        # Reload configuration
-                        config_file = await self._get_config_file_path()
-                        if not config_file:
-                            await self._handle_connection_failure("[bg] Failed to determine config file path during reload")
-                            await asyncio.sleep(self._connection_retry_interval)
-                            continue
-                        cfg = await self.device_config.load_device_config_by_file_async(
-                            config_file
-                        )
-                        if cfg and isinstance(cfg, dict):
-                            # Store full config (including product_info)
-                            self._full_config_cache = cfg
-                            # Build unified data_points from configuration using utility function
-                            data_points, batch_ranges = parse_device_configuration(cfg)
-                            if data_points:
-                                self._device_config_cache = data_points
-                                self._batch_ranges_cache = batch_ranges
-                                self._config_cache_valid = True
-                                self.logger.info(
-                                    "[bg] Configuration reloaded successfully, %d data points",
-                                    len(data_points),
-                                )
-                            else:
-                                self.logger.error(
-                                    "[bg] Failed to reload configuration - no data points"
-                                )
-                                await asyncio.sleep(self._connection_retry_interval)
-                                continue
-                        else:
-                            self.logger.error(
-                                "[bg] Failed to reload configuration - invalid config file"
-                            )
-                            await asyncio.sleep(self._connection_retry_interval)
-                            continue
-
-                    if self._is_config_cache_valid():
-                        self.logger.debug("[bg] Starting periodic data read")
-                        data = await self.modbus_manager.get_all_data(
-                            self._device_config_cache,
-                            batch_ranges=self._batch_ranges_cache,
-                            use_batch_optimization=True,
-                        )
-                        await self._update_unavailable_registers()
-                        if data:
-                            # Override model sensor value with product name (MUST do before publishing)
-                            self._override_model_with_product_name(data)
-                            self._inject_version_gates(data)
-
-                            # Log data comparison for periodic reads
-                            old_data = (
-                                self._latest_data.copy() if self._latest_data else None
-                            )
-                            self._latest_data = data
-                            self._log_data_update("periodic", data, old_data)
-
-                            self.async_set_updated_data(data)
-                            self.logger.debug(
-                                "[bg] Periodic data published to Home Assistant"
-                            )
-
-                            # Reset failure count on successful read
-                            if self._consecutive_failures > 0:
-                                self._consecutive_failures = 0
-
-                            self.logger.debug(
-                                "[bg] Periodic read completed successfully, continuing loop"
-                            )
-                        else:
-                            self.logger.debug(
-                                "[bg] periodic data fetch failed (attempt %d)",
-                                self._consecutive_failures + 1,
-                            )
-                            if self._consecutive_failures >= 2:
-                                await self._handle_connection_failure("[bg] periodic data fetch failed after multiple attempts")
-                            else:
-                                self._consecutive_failures += 1
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                await self._handle_connection_failure(f"[bg] loop exception: {e}")
-                await asyncio.sleep(self._connection_retry_interval)
-
-    def _handle_connection_success(self):
-        """Handle connection success."""
-        if self._connection_failed:
-            # HA best practice: log once when device comes back online
+        if self._consecutive_failures:
             self.logger.info(
-                "Device %s is back online (was unavailable for %d retries)",
+                "Device %s is back online (was unavailable for %d attempts)",
                 self.ip_address,
                 self._consecutive_failures,
             )
-            self._connection_failed = False
             self._consecutive_failures = 0
-            self._device_unavailable_logged = False  # Reset for next unavailability
-            # Reset retry interval to fast recovery
-            self._connection_retry_interval = CONNECTION_RETRY_DELAY
-            # Reset connection attempt time to allow immediate retry if needed
-            self._last_connection_attempt = 0
-        else:
-            self.logger.debug("Connection success - already in connected state")
+
+        try:
+            if self.device_info.get("model") and self.device_info.get("model") != "--":
+                self._update_device_registry_info()
+        except Exception as e:
+            self.logger.debug("Failed to update device registry: %s", e)
+
+        self._ever_connected = True
+        return data
 
     def _is_config_cache_valid(self) -> bool:
         """Check if configuration cache is valid."""
@@ -1153,81 +944,18 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
             and self._batch_ranges_cache is not None
         )
 
-    async def async_wait_for_first_data(self, timeout: float = 15.0) -> None:
-        if self._latest_data:
-            return
-        deadline = asyncio.get_running_loop().time() + timeout
-        while not self._latest_data:
-            remaining = deadline - asyncio.get_running_loop().time()
-            if remaining <= 0:
-                self.logger.debug(
-                    "async_wait_for_first_data timed out after %.1fs, proceeding without data",
-                    timeout,
-                )
-                return
-            await asyncio.sleep(min(0.1, remaining))
-
-    async def ensure_config_ready(self) -> dict[str, Any]:
-        """Ensure device configuration is loaded synchronously for platform setup.
-        Returns data_points dict if ready, otherwise empty dict.
-        """
-        if self._is_config_cache_valid():
-            return self._device_config_cache  # type: ignore[return-value]
-
-        # Attempt to connect using device-specific modbus manager, then load device-specific config file
-        try:
-            client = await self.modbus_manager.get_client()
-            connected = client is not None
-            if not connected:
-                return {}
-
-            # small stabilization delay
-            await asyncio.sleep(0.5)
-            config_file = await self._get_config_file_path()
-            if not config_file:
-                return {}
-            self._selected_config_file = config_file
-            cfg = await self.device_config.load_device_config_by_file_async(config_file)
-            if not (cfg and isinstance(cfg, dict)):
-                return {}
-
-            # Store full config (including product_info)
-            self._full_config_cache = cfg
-            # Build data_points using utility function
-            data_points, batch_ranges = parse_device_configuration(cfg)
-            if data_points:
-                self._device_config_cache = data_points
-                self._batch_ranges_cache = batch_ranges
-                self._config_cache_valid = True
-                return data_points
-        except Exception:
-            return {}
-        return {}
-
-    async def _get_device_config_with_cache(self) -> dict[str, Any]:
-        """Return cached device configuration if available; background loop loads it."""
+    async def get_device_data_points(self) -> dict[str, Any]:
+        """Public method: Get device data points configuration for other platforms to use."""
         if self._is_config_cache_valid():
             return self._device_config_cache
         return {}
 
-    async def get_device_data_points(self) -> dict[str, Any]:
-        """Public method: Get device data points configuration for other platforms to use."""
-        return await self._get_device_config_with_cache()
-
-    async def _async_update_data(self) -> dict[str, Any]:
-        """Return latest known data; background loop manages IO and reconnection."""
-        self.logger.debug(
-            "_async_update_data called, returning %d data points",
-            len(self._latest_data) if self._latest_data else 0,
-        )
-        return self._latest_data
-
     async def async_shutdown(self):
-        """Shutdown coordinator."""
-        # Disconnect device-specific modbus connection
-        await self.modbus_manager.disconnect()
-        # Stop background loop
-        self._stop_bg = True
-        # Use resource manager for proper cleanup
-        await self._resource_manager.shutdown()
+        """Shutdown coordinator.
+
+        super().async_shutdown() first: it sets _shutdown_requested, which stops
+        any further refresh from starting, so the disconnect below cannot end up
+        competing with an in-flight read for the manager's I/O lock (issue #117).
+        """
         await super().async_shutdown()
+        await self.modbus_manager.disconnect()

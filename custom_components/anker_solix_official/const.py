@@ -4,9 +4,12 @@ DOMAIN = "anker_solix_official"
 
 # Timing constants (seconds)
 SCAN_INTERVAL = 5
-CONNECTION_RETRY_DELAY = 10
 MODBUS_RESPONSE_TIMEOUT = 5
 WRITE_CONDITION_REVERT_DELAY = 0.1
+
+# Consecutive empty Modbus frames ridden out on the last good values before the
+# refresh is reported as failed (and every entity therefore goes unavailable).
+EMPTY_FRAME_TOLERANCE = 2
 
 # Connection constants
 CONNECTION_CHECK_INTERVAL = 30

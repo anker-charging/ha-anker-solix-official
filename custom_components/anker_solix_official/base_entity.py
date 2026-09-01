@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, Coroutine, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -56,8 +55,13 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
-        if not self.coordinator.is_connected():
+        """Return if entity is available.
+
+        Delegates to CoordinatorEntity, i.e. to `last_update_success`, so
+        availability follows the outcome of the latest refresh instead of a
+        separately tracked connection flag (issue #117).
+        """
+        if not super().available:
             return False
 
         self._log_unreadable_register(self._register_address)
@@ -427,63 +431,29 @@ async def async_setup_entities_with_retry(
     entity_factory: Callable[["AnkerSolixOfficialCoordinator", str, dict], Any],
     platform_name: str,
 ) -> None:
-    """Set up entities with retry logic for delayed configuration.
+    """Create this platform's entities from the coordinator's device config.
 
-    Args:
-        hass: Home Assistant instance
-        coordinator: Data coordinator
-        async_add_entities: Callback to add entities
-        entity_filter: Function to filter which configs to create entities for
-        entity_factory: Function to create entity from config
-        platform_name: Platform name for logging
+    The coordinator loads the device configuration during its first refresh, before
+    `async_config_entry_first_refresh` returns and therefore before platforms are
+    forwarded, so the configuration is always present here. There is deliberately
+    no deferred/retry path: the previous one registered a coordinator listener
+    that outlived unload and could add entities to a torn-down platform, which is
+    what produced the duplicate unique_id errors in issue #117.
     """
-    # Try to get configuration
-    data_points = await coordinator.ensure_config_ready()
+    data_points = await coordinator.get_device_data_points()
     if not data_points:
-        data_points = await coordinator.get_device_data_points()
-
-    if data_points:
-        # Configuration available, create entities immediately
-        entities = [
-            entity_factory(coordinator, key, config)
-            for key, config in data_points.items()
-            if entity_filter(key, config)
-        ]
-        if entities:
-            async_add_entities(entities)
-            _LOGGER.debug("Added %d %s entities", len(entities), platform_name)
+        _LOGGER.warning(
+            "No device configuration available for %s, no %s entities created",
+            coordinator.ip_address,
+            platform_name,
+        )
         return
 
-    # Configuration not ready, set up deferred loading
-    _LOGGER.debug(
-        "No device configuration available for %s, deferring %s setup",
-        coordinator.ip_address,
-        platform_name,
-    )
-
-    state = {"added": False}
-    remove_token: dict[str, Callable | None] = {"fn": None}
-
-    async def _try_add_entities() -> None:
-        if state["added"]:
-            return
-        dps = await coordinator.get_device_data_points()
-        if not dps:
-            return
-        entities = [
-            entity_factory(coordinator, key, config)
-            for key, config in dps.items()
-            if entity_filter(key, config)
-        ]
-        if entities:
-            async_add_entities(entities)
-            state["added"] = True
-            _LOGGER.debug("Deferred setup: added %d %s entities", len(entities), platform_name)
-            if remove_token["fn"]:
-                remove_token["fn"]()
-
-    def _listener() -> None:
-        coordinator.hass.async_create_task(_try_add_entities())
-
-    remove_token["fn"] = coordinator.async_add_listener(_listener)
-    await _try_add_entities()
+    entities = [
+        entity_factory(coordinator, key, config)
+        for key, config in data_points.items()
+        if entity_filter(key, config)
+    ]
+    if entities:
+        async_add_entities(entities)
+        _LOGGER.debug("Added %d %s entities", len(entities), platform_name)

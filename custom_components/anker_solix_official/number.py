@@ -185,11 +185,8 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        # First check base availability (coordinator connected)
-        if not self.coordinator.is_connected():
+        if not super().available:
             return False
-
-        self._log_unreadable_register(self._register_address)
 
         if not self._is_capability_supported():
             return False

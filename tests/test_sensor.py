@@ -26,10 +26,10 @@ class _FakeCoordinator:
         self.entry = type("Entry", (), {"entry_id": "test-entry"})()
         self.device_info = {"model": "Smart Meter Gen 2"}
         self.data: dict[str, Any] = {}
-        self._connected = True
+        self.last_update_success = True
 
     def is_connected(self) -> bool:
-        return self._connected
+        return self.last_update_success
 
     def is_register_available(self, address: int) -> bool:
         return True
@@ -221,3 +221,55 @@ class TestValueMappingSensor:
             },
         )
         assert entity.native_value == "three_phase"
+
+
+class TestMissingKeyIsUnknownNotZero:
+    """Issue #55 regression, at single-register granularity.
+
+    A decode failure omits the key from coordinator.data entirely (it is
+    never written as a fabricated 0/""). native_value must surface that as
+    None (HA state "unknown") rather than substituting 0/"" itself, or the
+    same false-energy-spike bug reappears whenever only one register in an
+    otherwise-successful refresh fails to decode.
+    """
+
+    def test_numeric_sensor_missing_key_returns_none(self, fake_coordinator) -> None:
+        fake_coordinator.data = {"other_key": 42}  # this entity's key absent
+        entity = _make_sensor(
+            fake_coordinator,
+            "energy_total",
+            {
+                "address": 10200,
+                "data_type": "UINT32",
+                "unit": "kWh",
+                "gain": 1,
+                "count": 2,
+            },
+        )
+        assert entity.native_value is None
+
+    def test_string_sensor_missing_key_returns_none(self, fake_coordinator) -> None:
+        fake_coordinator.data = {"other_key": "x"}
+        entity = _make_sensor(
+            fake_coordinator,
+            "device_sn",
+            {"address": 10100, "data_type": "STRING", "unit": "/", "gain": 1},
+        )
+        assert entity.native_value is None
+
+    def test_aggregated_sensor_missing_primary_key_returns_none(
+        self, fake_coordinator
+    ) -> None:
+        fake_coordinator.data = {"secondary_power": 100}  # primary key absent
+        entity = _make_sensor(
+            fake_coordinator,
+            "primary_power",
+            {
+                "address": 10300,
+                "data_type": "INT32",
+                "unit": "W",
+                "gain": 1,
+                "additional_sources": ["secondary_power"],
+            },
+        )
+        assert entity.native_value is None

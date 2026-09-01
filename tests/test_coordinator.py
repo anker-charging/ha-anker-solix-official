@@ -1,19 +1,16 @@
 """Unit tests for AnkerSolixOfficialCoordinator.
 
-Coordinator.__init__ spawns a background connection loop task against the
-real modbus_manager/device_config objects it creates internally. To keep
-these tests focused on the coordinator's own logic (not full modbus I/O),
-the background task is always awaited/cancelled in fixture teardown, and
-most tests target the coordinator's synchronous helpers and its async
-methods directly (bypassing the background loop) with a fake modbus_manager
-substituted in after construction.
+The coordinator does its device I/O inside `_async_update_data` (connect,
+one-time config load, then the register read), with retry timing and
+availability owned by DataUpdateCoordinator. Most tests here target the
+coordinator's synchronous helpers and its async methods directly, with a fake
+modbus_manager substituted in after construction so no real Modbus I/O happens.
 """
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
+from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.anker_solix_official.const import DOMAIN
@@ -23,15 +20,22 @@ from custom_components.anker_solix_official.coordinator import (
 from custom_components.anker_solix_official.device_logger import WriteResult
 
 
+def _async_return(value):
+    """Build an async stub that ignores its args and returns `value`."""
+
+    async def _stub(*_args, **_kwargs):
+        return value
+
+    return _stub
+
+
 @pytest.fixture
 async def coordinator(hass):
-    """Build a coordinator with its background loop stopped immediately.
+    """Build a coordinator without triggering any device I/O.
 
-    The connection_loop task cannot be prevented from spawning (it's wired
-    into __init__ via the HA event bus / call_soon_threadsafe), so instead
-    it is allowed to start and then immediately told to stop via _stop_bg,
-    with the task itself awaited so no warning about a lingering task leaks
-    into other tests.
+    Construction no longer spawns a background task: DataUpdateCoordinator owns
+    the polling schedule and only starts it once an entity subscribes, so the
+    coordinator can be built and inspected directly.
     """
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -40,13 +44,6 @@ async def coordinator(hass):
     )
     entry.add_to_hass(hass)
     coord = AnkerSolixOfficialCoordinator(hass, entry)
-    await asyncio.sleep(0)  # let the scheduled _spawn_task callback run
-    coord._stop_bg = True
-    if coord._bg_task is not None:
-        try:
-            await asyncio.wait_for(coord._bg_task, timeout=2)
-        except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
-            pass
     yield coord
     await coord.async_shutdown()
 
@@ -117,23 +114,14 @@ class TestValidateIpv4:
 
 
 class TestIsConnected:
-    """is_connected() public state reflecting both status and failure flag."""
+    """is_connected() derived from the latest refresh outcome."""
 
-    def test_connected_and_not_failed_is_true(self, coordinator) -> None:
-        coordinator._status = "connected"
-        coordinator._connection_failed = False
+    def test_successful_last_refresh_is_true(self, coordinator) -> None:
+        coordinator.last_update_success = True
         assert coordinator.is_connected() is True
 
-    def test_status_not_connected_is_false(self, coordinator) -> None:
-        coordinator._status = "disconnected"
-        coordinator._connection_failed = False
-        assert coordinator.is_connected() is False
-
-    def test_connected_but_failed_flag_set_is_false(self, coordinator) -> None:
-        # Arrange: a race where status hasn't been reset yet but a failure
-        # was just recorded -- is_connected() must still report False.
-        coordinator._status = "connected"
-        coordinator._connection_failed = True
+    def test_failed_last_refresh_is_false(self, coordinator) -> None:
+        coordinator.last_update_success = False
         assert coordinator.is_connected() is False
 
 
@@ -209,8 +197,6 @@ class TestGetStoredSn:
         )
         entry.add_to_hass(hass)
         coord = AnkerSolixOfficialCoordinator(hass, entry)
-        await asyncio.sleep(0)
-        coord._stop_bg = True
 
         # Act & Assert
         assert coord._get_stored_sn() == "ABC1234567890"
@@ -226,8 +212,6 @@ class TestGetStoredSn:
         )
         entry.add_to_hass(hass)
         coord = AnkerSolixOfficialCoordinator(hass, entry)
-        await asyncio.sleep(0)
-        coord._stop_bg = True
 
         # Act & Assert
         assert coord._get_stored_sn() == ""
@@ -242,8 +226,6 @@ class TestGetStoredSn:
         )
         entry.add_to_hass(hass)
         coord = AnkerSolixOfficialCoordinator(hass, entry)
-        await asyncio.sleep(0)
-        coord._stop_bg = True
 
         # Act & Assert
         assert coord._get_stored_sn() == ""
@@ -299,55 +281,6 @@ class TestIsConfigCacheValid:
         assert coordinator._is_config_cache_valid() is False
 
 
-class TestShouldAttemptReconnection:
-    """_should_attempt_reconnection() backoff-interval gate."""
-
-    def test_not_failed_returns_false(self, coordinator) -> None:
-        coordinator._connection_failed = False
-        assert coordinator._should_attempt_reconnection() is False
-
-    def test_failed_but_within_retry_interval_returns_false(self, coordinator) -> None:
-        import time
-
-        coordinator._connection_failed = True
-        coordinator._last_connection_attempt = time.time()
-        coordinator._connection_retry_interval = 100
-        assert coordinator._should_attempt_reconnection() is False
-
-    def test_failed_and_past_retry_interval_returns_true(self, coordinator) -> None:
-        coordinator._connection_failed = True
-        coordinator._last_connection_attempt = 0
-        coordinator._connection_retry_interval = 1
-        assert coordinator._should_attempt_reconnection() is True
-
-
-class TestHandleConnectionSuccess:
-    """_handle_connection_success() recovery-from-failure state reset."""
-
-    def test_resets_failure_state_when_previously_failed(self, coordinator) -> None:
-        coordinator._connection_failed = True
-        coordinator._consecutive_failures = 5
-        coordinator._device_unavailable_logged = True
-        coordinator._connection_retry_interval = 300
-
-        coordinator._handle_connection_success()
-
-        assert coordinator._connection_failed is False
-        assert coordinator._consecutive_failures == 0
-        assert coordinator._device_unavailable_logged is False
-        assert coordinator._connection_retry_interval == 10
-
-    def test_no_op_when_already_connected(self, coordinator) -> None:
-        coordinator._connection_failed = False
-        coordinator._consecutive_failures = 3
-
-        coordinator._handle_connection_success()
-
-        # Assert: consecutive_failures is untouched by this branch (it is
-        # reset elsewhere in the connection loop, not by this method).
-        assert coordinator._consecutive_failures == 3
-
-
 class _FakeModbusManager:
     """Stand-in for ModbusConnectionManager, scripted per test."""
 
@@ -355,12 +288,16 @@ class _FakeModbusManager:
         self.client_available: bool = True
         self.read_device_pn_result: tuple[str, str, str] = ("hash1", "PN001", "0xAB")
         self.write_register_result: WriteResult = WriteResult(success=True)
+        self.all_data: dict = {"battery_soc": 55}
         self.force_disconnect_called = False
         self.disconnect_called = False
         self.update_ip_address_calls: list[str] = []
 
     async def get_client(self):
         return object() if self.client_available else None
+
+    async def get_all_data(self, data_points, batch_ranges=None, **_kw) -> dict:
+        return dict(self.all_data)
 
     async def read_device_pn(self) -> tuple[str, str, str]:
         return self.read_device_pn_result
@@ -483,20 +420,23 @@ class TestGetConfigFilePath:
         assert result == ""
 
 
-class TestHandleConnectionFailure:
-    """_handle_connection_failure() error-state transition and backoff tiering."""
+class TestHandleRefreshFailure:
+    """_handle_refresh_failure() socket teardown and mDNS trigger bookkeeping.
 
-    async def test_marks_disconnected_and_clears_latest_data(self, coordinator) -> None:
+    Retry timing and availability are NOT this method's job any more; they belong
+    to DataUpdateCoordinator, so the only state it owns is the failure counter
+    that gates mDNS re-discovery.
+    """
+
+    async def test_clears_latest_data(self, coordinator) -> None:
         # Arrange
         coordinator.modbus_manager = _FakeModbusManager()
         coordinator._latest_data = {"a": 1}
 
         # Act
-        await coordinator._handle_connection_failure("test failure")
+        await coordinator._handle_refresh_failure("test failure")
 
         # Assert
-        assert coordinator._connection_failed is True
-        assert coordinator._status == "disconnected"
         assert coordinator._latest_data == {}
 
     async def test_force_disconnects_the_modbus_connection(self, coordinator) -> None:
@@ -505,44 +445,32 @@ class TestHandleConnectionFailure:
         coordinator.modbus_manager = fake_manager
 
         # Act
-        await coordinator._handle_connection_failure("test failure")
+        await coordinator._handle_refresh_failure("test failure")
 
         # Assert
         assert fake_manager.force_disconnect_called is True
 
-    async def test_logs_unavailable_only_once_across_repeated_failures(
-        self, coordinator
-    ) -> None:
+    async def test_counts_consecutive_failures(self, coordinator) -> None:
         # Arrange
         coordinator.modbus_manager = _FakeModbusManager()
-        assert coordinator._device_unavailable_logged is False
 
         # Act
-        await coordinator._handle_connection_failure("first failure")
-        first_logged = coordinator._device_unavailable_logged
-        await coordinator._handle_connection_failure("second failure")
-
-        # Assert: flag flips to True after the first call and stays True.
-        assert first_logged is True
-        assert coordinator._device_unavailable_logged is True
-        assert coordinator._consecutive_failures == 2
-
-    @pytest.mark.parametrize(
-        ("failure_count", "expected_interval"),
-        [(1, 10), (3, 10), (4, 30), (10, 30), (11, 60), (30, 60), (31, 300)],
-    )
-    async def test_backoff_interval_escalates_with_consecutive_failures(
-        self, coordinator, failure_count: int, expected_interval: int
-    ) -> None:
-        # Arrange
-        coordinator.modbus_manager = _FakeModbusManager()
-        coordinator._consecutive_failures = failure_count - 1
-
-        # Act
-        await coordinator._handle_connection_failure("failure")
+        await coordinator._handle_refresh_failure("first failure")
+        await coordinator._handle_refresh_failure("second failure")
 
         # Assert
-        assert coordinator._connection_retry_interval == expected_interval
+        assert coordinator._consecutive_failures == 2
+
+    async def test_does_not_schedule_its_own_retry_interval(self, coordinator) -> None:
+        # Arrange: the custom 10/30/60/300 ladder was removed in favour of HA's
+        # own backoff, so no retry-interval attribute should reappear here.
+        coordinator.modbus_manager = _FakeModbusManager()
+
+        # Act
+        await coordinator._handle_refresh_failure("failure")
+
+        # Assert
+        assert not hasattr(coordinator, "_connection_retry_interval")
 
     async def test_force_disconnect_exception_is_swallowed(self, coordinator) -> None:
         # Arrange
@@ -553,8 +481,8 @@ class TestHandleConnectionFailure:
         coordinator.modbus_manager = _ExplodingManager()
 
         # Act & Assert: must not raise despite the manager failing.
-        await coordinator._handle_connection_failure("failure")
-        assert coordinator._connection_failed is True
+        await coordinator._handle_refresh_failure("failure")
+        assert coordinator._consecutive_failures == 1
 
 
 class TestMaybeMdnsLookup:
@@ -942,44 +870,113 @@ class TestInjectVersionGates:
         coordinator._inject_version_gates("not-a-dict")  # must not raise
 
 
-class TestEnsureConfigReady:
-    """ensure_config_ready() synchronous-path config load for platform setup."""
+class TestLoadDeviceConfiguration:
+    """_load_device_configuration() PN lookup + YAML parse into the caches."""
 
-    async def test_already_valid_cache_returns_it_directly(self, coordinator) -> None:
-        coordinator._config_cache_valid = True
-        coordinator._device_config_cache = {"a": {"address": 1}}
-        coordinator._batch_ranges_cache = []
+    async def test_unresolvable_pn_returns_empty_dict(self, coordinator) -> None:
+        class _NoPnManager(_FakeModbusManager):
+            async def read_device_pn(self):
+                return ("", "", "")
 
-        result = await coordinator.ensure_config_ready()
+        coordinator.modbus_manager = _NoPnManager()
 
-        assert result == {"a": {"address": 1}}
+        result = await coordinator._load_device_configuration()
 
-    async def test_no_client_available_returns_empty_dict(self, coordinator) -> None:
-        # Arrange
+        assert result == {}
+        assert coordinator._is_config_cache_valid() is False
+
+    async def test_unparseable_config_leaves_cache_invalid(
+        self, coordinator, monkeypatch
+    ) -> None:
+        coordinator.modbus_manager = _FakeModbusManager()
+        monkeypatch.setattr(
+            coordinator, "_get_config_file_path", _async_return("config/x.yaml")
+        )
+
+        async def _load(_file):
+            return None
+
+        monkeypatch.setattr(
+            coordinator.device_config, "load_device_config_by_file_async", _load
+        )
+
+        result = await coordinator._load_device_configuration()
+
+        assert result == {}
+        assert coordinator._is_config_cache_valid() is False
+
+    async def test_successful_load_populates_all_caches(
+        self, coordinator, monkeypatch
+    ) -> None:
+        coordinator.modbus_manager = _FakeModbusManager()
+        monkeypatch.setattr(
+            coordinator, "_get_config_file_path", _async_return("config/x.yaml")
+        )
+
+        async def _load(_file):
+            return {
+                "product_info": {"default_name": "Test"},
+                "read_quantities": {
+                    "battery_soc": {"address": 100, "data_type": "UINT16"}
+                },
+            }
+
+        monkeypatch.setattr(
+            coordinator.device_config, "load_device_config_by_file_async", _load
+        )
+
+        result = await coordinator._load_device_configuration()
+
+        assert "battery_soc" in result
+        assert coordinator._is_config_cache_valid() is True
+        assert coordinator._full_config_cache is not None
+
+
+class TestAsyncSetup:
+    """_async_connect_and_ensure_config(); UpdateFailed becomes ConfigEntryNotReady."""
+
+    async def test_unreachable_device_raises_update_failed(self, coordinator) -> None:
         class _NoClientManager(_FakeModbusManager):
             async def get_client(self):
                 return None
 
         coordinator.modbus_manager = _NoClientManager()
-        coordinator._config_cache_valid = False
 
-        # Act
-        result = await coordinator.ensure_config_ready()
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_connect_and_ensure_config()
 
-        # Assert
-        assert result == {}
+    async def test_unloadable_config_raises_update_failed(
+        self, coordinator, monkeypatch
+    ) -> None:
+        coordinator.modbus_manager = _FakeModbusManager()
+        monkeypatch.setattr(
+            coordinator, "_load_device_configuration", _async_return({})
+        )
 
-    async def test_manager_exception_returns_empty_dict(self, coordinator) -> None:
-        class _ExplodingManager(_FakeModbusManager):
-            async def get_client(self):
-                raise RuntimeError("boom")
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_connect_and_ensure_config()
 
-        coordinator.modbus_manager = _ExplodingManager()
-        coordinator._config_cache_valid = False
+    async def test_valid_cache_skips_reload_on_every_steady_state_refresh(
+        self, coordinator, monkeypatch
+    ) -> None:
+        # This runs on every 5s poll once connected, so a reload here would
+        # mean re-reading the PN and re-parsing the YAML config on every single
+        # refresh instead of once at connect time.
+        coordinator.modbus_manager = _FakeModbusManager()
+        coordinator._config_cache_valid = True
+        coordinator._device_config_cache = {"a": {"address": 1}}
+        coordinator._batch_ranges_cache = []
+        load_calls: list[None] = []
 
-        result = await coordinator.ensure_config_ready()
+        async def _tracked_load():
+            load_calls.append(None)
+            return {}
 
-        assert result == {}
+        monkeypatch.setattr(coordinator, "_load_device_configuration", _tracked_load)
+
+        await coordinator._async_connect_and_ensure_config()
+
+        assert load_calls == []
 
 
 class TestGetDeviceDataPoints:
@@ -1003,28 +1000,85 @@ class TestGetDeviceDataPoints:
 
 
 class TestAsyncUpdateData:
-    """_async_update_data() DataUpdateCoordinator hook returning cached data."""
+    """_async_update_data() performs the read and reports failure via UpdateFailed."""
 
-    async def test_returns_latest_data_snapshot(self, coordinator) -> None:
-        coordinator._latest_data = {"power": 100}
+    def _prime(self, coordinator) -> None:
+        coordinator._device_config_cache = {
+            "battery_soc": {"address": 100, "data_type": "UINT16"}
+        }
+        coordinator._batch_ranges_cache = []
+        coordinator._config_cache_valid = True
+        coordinator._full_config_cache = {"product_info": {"default_name": "Test"}}
+
+    async def test_returns_the_fetched_frame(self, coordinator) -> None:
+        self._prime(coordinator)
+        coordinator.modbus_manager = _FakeModbusManager()
 
         result = await coordinator._async_update_data()
 
-        assert result == {"power": 100}
+        assert result["battery_soc"] == 55
+        assert coordinator._latest_data["battery_soc"] == 55
+        assert coordinator._ever_connected is True
 
+    async def test_no_client_raises_update_failed(self, coordinator) -> None:
+        self._prime(coordinator)
 
-class TestAsyncWaitForFirstData:
-    """async_wait_for_first_data() bounded wait used during platform setup."""
+        class _NoClientManager(_FakeModbusManager):
+            async def get_client(self):
+                return None
 
-    async def test_returns_immediately_if_data_already_present(self, coordinator) -> None:
-        coordinator._latest_data = {"a": 1}
-        await coordinator.async_wait_for_first_data(timeout=5.0)  # must not block
+        coordinator.modbus_manager = _NoClientManager()
 
-    async def test_times_out_when_data_never_arrives(self, coordinator) -> None:
-        coordinator._latest_data = {}
-        await coordinator.async_wait_for_first_data(timeout=0.05)
-        # Assert: returns without raising once the deadline passes.
-        assert coordinator._latest_data == {}
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+
+    async def test_empty_frame_raises_update_failed(self, coordinator) -> None:
+        self._prime(coordinator)
+
+        class _EmptyManager(_FakeModbusManager):
+            async def get_all_data(self, data_points, batch_ranges=None, **_kw):
+                return {}
+
+        coordinator.modbus_manager = _EmptyManager()
+
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+
+    async def test_read_exception_is_wrapped_in_update_failed(self, coordinator) -> None:
+        self._prime(coordinator)
+
+        class _ExplodingManager(_FakeModbusManager):
+            async def get_all_data(self, data_points, batch_ranges=None, **_kw):
+                raise RuntimeError("boom")
+
+        coordinator.modbus_manager = _ExplodingManager()
+
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+
+    async def test_failure_path_drops_the_socket(self, coordinator) -> None:
+        self._prime(coordinator)
+
+        class _EmptyManager(_FakeModbusManager):
+            async def get_all_data(self, data_points, batch_ranges=None, **_kw):
+                return {}
+
+        manager = _EmptyManager()
+        coordinator.modbus_manager = manager
+
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+
+        assert manager.force_disconnect_called is True
+
+    async def test_recovery_resets_the_failure_counter(self, coordinator) -> None:
+        self._prime(coordinator)
+        coordinator.modbus_manager = _FakeModbusManager()
+        coordinator._consecutive_failures = 7
+
+        await coordinator._async_update_data()
+
+        assert coordinator._consecutive_failures == 0
 
 
 class TestLogDataUpdate:
@@ -1319,11 +1373,38 @@ class TestUpdateDeviceRegistryInfo:
 class TestAsyncShutdown:
     """async_shutdown() full teardown sequence."""
 
-    async def test_disconnects_modbus_and_stops_background_loop(self, coordinator) -> None:
+    async def test_disconnects_modbus(self, coordinator) -> None:
         fake_manager = _FakeModbusManager()
         coordinator.modbus_manager = fake_manager
 
         await coordinator.async_shutdown()
 
         assert fake_manager.disconnect_called is True
-        assert coordinator._stop_bg is True
+
+    async def test_stops_further_refreshes_before_disconnecting(
+        self, coordinator
+    ) -> None:
+        # The base class sets _shutdown_requested, which blocks any new refresh.
+        # Ordering matters: a refresh started after the disconnect would reopen
+        # the socket and could hold the I/O lock the disconnect needs (#117).
+        order: list[str] = []
+
+        class _RecordingManager(_FakeModbusManager):
+            async def disconnect(self) -> None:
+                order.append("disconnect")
+                self.disconnect_called = True
+
+        coordinator.modbus_manager = _RecordingManager()
+
+        await coordinator.async_shutdown()
+
+        assert coordinator._shutdown_requested is True
+        assert order == ["disconnect"]
+
+    async def test_refresh_after_shutdown_is_refused(self, coordinator) -> None:
+        coordinator.modbus_manager = _FakeModbusManager()
+
+        await coordinator.async_shutdown()
+        await coordinator.async_refresh()
+
+        assert coordinator._latest_data == {}

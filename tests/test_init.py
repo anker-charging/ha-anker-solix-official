@@ -9,12 +9,12 @@ real Modbus I/O or the entity platforms' own setup logic.
 from __future__ import annotations
 
 import pytest
+from homeassistant.exceptions import ConfigEntryNotReady
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.anker_solix_official import (
     async_setup_entry,
     async_unload_entry,
-    _async_update_listener,
 )
 from custom_components.anker_solix_official.const import DOMAIN
 
@@ -27,16 +27,12 @@ class _FakeCoordinator:
     def __init__(self, hass, entry) -> None:
         self.hass = hass
         self.entry = entry
-        self.set_updated_data_calls: list[dict] = []
-        self.wait_for_first_data_called = False
+        self.first_refresh_called = False
         self.shutdown_called = False
         _FakeCoordinator.instances.append(self)
 
-    def async_set_updated_data(self, data: dict) -> None:
-        self.set_updated_data_calls.append(data)
-
-    async def async_wait_for_first_data(self) -> None:
-        self.wait_for_first_data_called = True
+    async def async_config_entry_first_refresh(self) -> None:
+        self.first_refresh_called = True
 
     async def async_shutdown(self) -> None:
         self.shutdown_called = True
@@ -86,11 +82,50 @@ class TestAsyncSetupEntry:
         assert result is True
         assert hass.data[DOMAIN][entry.entry_id] is _FakeCoordinator.instances[0]
 
-    async def test_calls_async_set_updated_data_with_empty_dict_first(
+    async def test_awaits_first_refresh_before_forwarding_platforms(
         self, hass, entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # Arrange: this seeds entities as "unavailable" rather than "unknown"
-        # from the very first frame, before the background loop has data.
+        # Arrange: the first refresh loads the device config and raises
+        # ConfigEntryNotReady when the device is unreachable, so it must
+        # complete before any platform is forwarded.
+        monkeypatch.setattr(
+            "custom_components.anker_solix_official.AnkerSolixOfficialCoordinator",
+            _FakeCoordinator,
+        )
+        call_order: list[str] = []
+
+        async def _fake_forward(entry, platforms):
+            call_order.append("forward")
+            return True
+
+        monkeypatch.setattr(
+            hass.config_entries, "async_forward_entry_setups", _fake_forward
+        )
+
+        original_refresh = _FakeCoordinator.async_config_entry_first_refresh
+
+        async def _tracked_refresh(self):
+            call_order.append("first_refresh")
+            await original_refresh(self)
+
+        monkeypatch.setattr(
+            _FakeCoordinator, "async_config_entry_first_refresh", _tracked_refresh
+        )
+
+        # Act
+        await async_setup_entry(hass, entry)
+
+        # Assert
+        coord = _FakeCoordinator.instances[0]
+        assert coord.first_refresh_called is True
+        assert call_order == ["first_refresh", "forward"]
+
+    async def test_registers_no_update_listener(
+        self, hass, entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A blanket "reload on any entry change" listener would make the
+        # coordinator's own title/options writes reload the integration
+        # mid-setup, which is what produced the duplicate entities in #117.
         monkeypatch.setattr(
             "custom_components.anker_solix_official.AnkerSolixOfficialCoordinator",
             _FakeCoordinator,
@@ -103,13 +138,46 @@ class TestAsyncSetupEntry:
             hass.config_entries, "async_forward_entry_setups", _fake_forward
         )
 
-        # Act
         await async_setup_entry(hass, entry)
 
-        # Assert
+        assert entry.update_listeners == []
+
+    async def test_failed_first_refresh_shuts_down_and_does_not_store_coordinator(
+        self, hass, entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A coordinator that opened a Modbus connection while trying to set up
+        # must be torn down when the first refresh fails, and must not be left
+        # in hass.data where a later unload or a retry would trip over it.
+        monkeypatch.setattr(
+            "custom_components.anker_solix_official.AnkerSolixOfficialCoordinator",
+            _FakeCoordinator,
+        )
+
+        async def _failing_refresh(self):
+            self.first_refresh_called = True
+            raise ConfigEntryNotReady
+
+        monkeypatch.setattr(
+            _FakeCoordinator, "async_config_entry_first_refresh", _failing_refresh
+        )
+
+        forwarded: list[str] = []
+
+        async def _fake_forward(entry, platforms):
+            forwarded.extend(platforms)
+            return True
+
+        monkeypatch.setattr(
+            hass.config_entries, "async_forward_entry_setups", _fake_forward
+        )
+
+        with pytest.raises(ConfigEntryNotReady):
+            await async_setup_entry(hass, entry)
+
         coord = _FakeCoordinator.instances[0]
-        assert coord.set_updated_data_calls == [{}]
-        assert coord.wait_for_first_data_called is True
+        assert coord.shutdown_called is True
+        assert entry.entry_id not in hass.data.get(DOMAIN, {})
+        assert forwarded == []
 
     async def test_forwards_setup_to_all_four_platforms(
         self, hass, entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
@@ -241,23 +309,20 @@ class TestAsyncUnloadEntry:
         # Assert
         assert unloaded_platforms == ["sensor", "select", "number", "switch"]
 
-
-class TestAsyncUpdateListener:
-    """_async_update_listener() config-change reload trigger."""
-
-    async def test_triggers_a_reload_of_the_entry(
+    async def test_repeated_unload_after_coordinator_already_popped(
         self, hass, entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # Arrange
-        reload_calls: list[str] = []
+        # HA retries unload after a FAILED_UNLOAD, by which point the
+        # coordinator may already be gone; that must not raise KeyError.
+        hass.data.setdefault(DOMAIN, {})
 
-        async def _fake_reload(entry_id):
-            reload_calls.append(entry_id)
+        async def _fake_unload(entry, platforms):
+            return True
 
-        monkeypatch.setattr(hass.config_entries, "async_reload", _fake_reload)
+        monkeypatch.setattr(
+            hass.config_entries, "async_unload_platforms", _fake_unload
+        )
 
-        # Act
-        await _async_update_listener(hass, entry)
+        result = await async_unload_entry(hass, entry)
 
-        # Assert
-        assert reload_calls == [entry.entry_id]
+        assert result is True

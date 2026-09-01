@@ -87,10 +87,8 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available, respecting version_gate and visibility_entity gates."""
-        if not self.coordinator.is_connected():
+        if not super().available:
             return False
-
-        self._log_unreadable_register(self._register_address)
 
         version_gate = self._config.get("version_gate")
         if version_gate:
@@ -165,7 +163,7 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
             if 10**precision == gain:
                 self._attr_suggested_display_precision = precision
 
-    def _get_aggregated_value(self, default: Any = 0) -> Any:
+    def _get_aggregated_value(self, default: Any = None) -> Any:
         """Get aggregated value from primary and additional sources.
 
         If additional_sources is configured, sums values from all sources.
@@ -215,16 +213,24 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
         if not self.available:
             return None
 
-        data_type = self._config.get("data_type", "")
-
-        # Set default value based on data type
-        default = "" if data_type == "STRING" else 0
-
-        # Use aggregated value for sensors with additional_sources
+        # None as "not read this cycle" sentinel, not a fabricated 0/"": a
+        # decode failure omits the key from coordinator.data entirely (see
+        # _decode_register_value in modbus_client.py), so a missing key here
+        # means "no fresh data", never a real device-reported 0. Returning a
+        # substituted 0 for a total_increasing energy sensor reproduces the
+        # issue #55 false-spike bug at single-register granularity: Recorder
+        # would treat that fabricated 0 as a meter reset and produce a false
+        # spike once the real value returns. Returning None instead surfaces
+        # as state "unknown" (entity stays available), which Recorder's
+        # statistics compiler skips entirely rather than folding into sum/
+        # reset detection.
         if self._config.get("additional_sources"):
-            value = self._get_aggregated_value(default)
+            value = self._get_aggregated_value()
         else:
-            value = self._get_raw_value(default)
+            value = self._get_raw_value()
+
+        if value is None:
+            return None
 
         # Handle value mapping - return translation key directly for ENUM sensors
         value_mapping = self._config.get("value_mapping")
@@ -295,7 +301,7 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
         # For power_direction_format sensors, add raw numeric value for automation
         power_direction_format = self._config.get("power_direction_format")
         if power_direction_format:
-            raw_value = self._get_raw_value(0)
+            raw_value = self._get_raw_value()
             if isinstance(raw_value, (int, float)):
                 attrs["raw_value"] = raw_value
                 attrs["unit"] = self._config.get("unit", "")
@@ -303,7 +309,7 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
         # For aggregated sensors, show component values
         additional_sources = self._config.get("additional_sources", [])
         if additional_sources:
-            primary_value = self._get_raw_value(0)
+            primary_value = self._get_raw_value()
             attrs["primary_value"] = primary_value
             attrs["additional_sources"] = additional_sources
             # Show individual source values

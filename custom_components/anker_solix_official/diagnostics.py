@@ -20,7 +20,7 @@ async def async_get_config_entry_diagnostics(
     return {
         "config_entry": async_redact_data(entry.as_dict(), TO_REDACT),
         "connection": {
-            "status": coordinator._status,
+            "last_update_success": coordinator.last_update_success,
             "consecutive_failures": coordinator._consecutive_failures,
             "ever_connected": coordinator._ever_connected,
             "initial_mode_sent": coordinator._initial_mode_sent,

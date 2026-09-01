@@ -127,10 +127,8 @@ class ModbusLocalDeviceSelect(AnkerSolixBaseEntity, SelectEntity):
 
         Supports visibility_bit for bit-based visibility check.
         """
-        if not self.coordinator.is_connected():
+        if not super().available:
             return False
-
-        self._log_unreadable_register(self._register_address)
 
         visibility_entity = self._config.get("visibility_entity")
         if visibility_entity:
