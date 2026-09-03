@@ -1,0 +1,43 @@
+name: Ruff
+
+on:
+  pull_request:
+
+jobs:
+  ruff:
+    name: Lint changed Python files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install ruff
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run ruff on changed Python files
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          CHANGED=$(git diff --name-only --diff-filter=ACMR "origin/$BASE_REF...HEAD" -- '*.py')
+          FILES=""
+          for f in $CHANGED; do
+            if [ -f "$f" ]; then
+              FILES="$FILES $f"
+            fi
+          done
+          if [ -z "$FILES" ]; then
+            echo "No Python files changed in this PR - skipping ruff."
+            exit 0
+          fi
+          echo "Linting changed Python files:$FILES"
+          # shellcheck disable=SC2086
+          ruff check $FILES

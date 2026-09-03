@@ -1,0 +1,31 @@
+# Lint gate for the Anker Solix Official integration.
+#
+# Incremental-gate policy: this config backs the "Ruff" workflow, which lints
+# only the Python files changed in a pull request. Legacy files are left
+# untouched until someone modifies them.
+#
+# Rule selection keeps high-signal categories and deliberately skips:
+# - BLE (blind except): broad except + logging is an intentional pattern here
+# - E501 (line length): not enforced in this repo
+# - RUF001/002/003 (ambiguous unicode): Chinese comments/docstrings are OK
+target-version = "py311"
+line-length = 88
+src = ["custom_components", "tests"]
+extend-exclude = ["reports", "preview", ".tmp.issue81"]
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes (unused imports/variables, undefined names)
+    "W",   # pycodestyle warnings
+    "I",   # import sorting
+    "UP",  # pyupgrade (modern typing syntax)
+    "B",   # flake8-bugbear (common bugs)
+    "RUF", # ruff-specific checks
+]
+ignore = [
+    "E501",   # line length: not enforced in this repo
+    "RUF001", # ambiguous unicode in strings: Chinese text is intentional
+    "RUF002", # ambiguous unicode in docstrings: Chinese text is intentional
+    "RUF003", # ambiguous unicode in comments: Chinese text is intentional
+]
