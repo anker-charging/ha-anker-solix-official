@@ -21,9 +21,6 @@ import time
 from typing import Any
 
 import pytest
-from homeassistant.helpers.update_coordinator import UpdateFailed
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.anker_solix_official.const import (
     DOMAIN,
     EMPTY_FRAME_TOLERANCE,
@@ -32,6 +29,8 @@ from custom_components.anker_solix_official.coordinator import (
     AnkerSolixOfficialCoordinator,
 )
 from custom_components.anker_solix_official.device_logger import WriteResult
+from homeassistant.helpers.update_coordinator import UpdateFailed
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 MINIMAL_CFG: dict[str, Any] = {
     "product_info": {"default_name": "Test Product"},

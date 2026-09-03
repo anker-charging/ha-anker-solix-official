@@ -10,14 +10,13 @@ modbus_manager substituted in after construction so no real Modbus I/O happens.
 from __future__ import annotations
 
 import pytest
-from homeassistant.helpers.update_coordinator import UpdateFailed
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.anker_solix_official.const import DOMAIN
 from custom_components.anker_solix_official.coordinator import (
     AnkerSolixOfficialCoordinator,
 )
 from custom_components.anker_solix_official.device_logger import WriteResult
+from homeassistant.helpers.update_coordinator import UpdateFailed
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _async_return(value):
@@ -1339,7 +1338,7 @@ class TestUpdateDeviceRegistryInfo:
         from homeassistant.helpers import device_registry as dr
 
         dev_reg = dr.async_get(hass)
-        device = dev_reg.async_get_or_create(
+        _device = dev_reg.async_get_or_create(
             config_entry_id=coordinator.entry.entry_id,
             identifiers={(DOMAIN, coordinator.entry.entry_id)},
             manufacturer="Anker",

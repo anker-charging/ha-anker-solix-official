@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.anker_solix_official.const import DOMAIN
 from custom_components.anker_solix_official.diagnostics import (
     async_get_config_entry_diagnostics,
 )
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 class _FakeCoordinator:

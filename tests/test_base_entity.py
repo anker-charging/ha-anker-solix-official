@@ -13,10 +13,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.anker_solix_official.base_entity import AnkerSolixBaseEntity
 from custom_components.anker_solix_official.const import DOMAIN
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 class _ConcreteEntity(AnkerSolixBaseEntity):

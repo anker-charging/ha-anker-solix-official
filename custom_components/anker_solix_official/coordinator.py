@@ -8,22 +8,22 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .config_utils import parse_device_configuration
 from .const import (
     DOMAIN,
     EMPTY_FRAME_TOLERANCE,
     LOG_THROTTLE_INTERVAL,
     SCAN_INTERVAL,
 )
-from .modbus_manager import ModbusConnectionManager
 from .device_config import AnkerSolixDeviceConfig
-from .config_utils import parse_device_configuration
-from .throttled_logger import ThrottledLogger
-from .product_mapping import get_product_name_from_config
 from .device_logger import DeviceLoggerAdapter
 from .mdns_helper import find_device_ip_by_sn
+from .modbus_manager import ModbusConnectionManager
+from .product_mapping import get_product_name_from_config
+from .throttled_logger import ThrottledLogger
 
 
 class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
@@ -452,10 +452,10 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
             client = await self.modbus_manager.get_client()
             if not client or not hasattr(client, 'get_last_failed_registers'):
                 return
-            
+
             failed = client.get_last_failed_registers()
             successful = client.get_last_successful_registers()
-            
+
             new_failures = failed - self._unavailable_registers
             if new_failures:
                 self._unavailable_registers.update(new_failures)
@@ -464,7 +464,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
                     len(new_failures),
                     ", ".join(f"{a} (0x{a:04X})" for a in sorted(new_failures)),
                 )
-            
+
             recovered = successful & self._unavailable_registers
             if recovered:
                 self._unavailable_registers -= recovered
@@ -675,7 +675,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
         try:
             self.logger.debug("Attempting to read device PN")
             result = await self.modbus_manager.read_device_pn()
-            pn_hash, raw_pn, raw_hex = result
+            pn_hash, _, raw_hex = result
             if pn_hash:
                 self.logger.info(
                     "Device PN read successfully - hash: '%s', Registers: [%s]",
@@ -696,7 +696,7 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
     async def _get_config_file_path(self) -> str:
         """Get configuration file path based on device PN."""
-        pn_hash, raw_pn, raw_hex = await self._read_device_pn()
+        pn_hash, _, raw_hex = await self._read_device_pn()
         if not pn_hash:
             self.logger.error(
                 "Cannot determine device PN, unable to load configuration"
@@ -705,8 +705,8 @@ class AnkerSolixOfficialCoordinator(DataUpdateCoordinator):
 
         # Check if device-specific config exists
         config_file = f"config/{pn_hash}.yaml"
-        from pathlib import Path
         import asyncio
+        from pathlib import Path
 
         config_path = Path(__file__).resolve().parent / config_file
 

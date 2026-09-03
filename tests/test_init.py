@@ -8,21 +8,22 @@ real Modbus I/O or the entity platforms' own setup logic.
 
 from __future__ import annotations
 
-import pytest
-from homeassistant.exceptions import ConfigEntryNotReady
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from typing import ClassVar
 
+import pytest
 from custom_components.anker_solix_official import (
     async_setup_entry,
     async_unload_entry,
 )
 from custom_components.anker_solix_official.const import DOMAIN
+from homeassistant.exceptions import ConfigEntryNotReady
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 class _FakeCoordinator:
     """Stand-in for AnkerSolixOfficialCoordinator."""
 
-    instances: list["_FakeCoordinator"] = []
+    instances: ClassVar[list[_FakeCoordinator]] = []
 
     def __init__(self, hass, entry) -> None:
         self.hass = hass

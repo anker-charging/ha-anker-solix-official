@@ -10,9 +10,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .base_entity import AnkerSolixBaseEntity, async_setup_entities_with_retry
 from .const import DOMAIN
 from .coordinator import AnkerSolixOfficialCoordinator
-from .base_entity import AnkerSolixBaseEntity, async_setup_entities_with_retry
 
 _LOGGER = logging.getLogger(__name__)
 

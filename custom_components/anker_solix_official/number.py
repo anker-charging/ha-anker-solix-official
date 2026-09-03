@@ -7,20 +7,18 @@ import logging
 from typing import Any
 
 from homeassistant.components.number import NumberEntity, NumberMode
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
 )
-from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .base_entity import AnkerSolixBaseEntity, async_setup_entities_with_retry
 from .const import DOMAIN, WRITE_CONDITION_REVERT_DELAY
 from .coordinator import AnkerSolixOfficialCoordinator
-from .base_entity import AnkerSolixBaseEntity, async_setup_entities_with_retry
 
 # Signal for mutual exclusion updates
 SIGNAL_MUTUAL_EXCLUSION_UPDATE = f"{DOMAIN}_mutual_exclusion_update"
@@ -348,20 +346,20 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
 
     def _get_soc_entity_value(self, entity_key: str) -> float | None:
         """Get current value of a SOC entity for validation.
-        
+
         Checks user selection first (for recently set values),
         then falls back to coordinator data (for device-read values).
         """
         user_value = self.coordinator.get_user_selection(entity_key)
         if user_value is not None:
             return float(user_value)
-        
+
         if self.coordinator.data and entity_key in self.coordinator.data:
             try:
                 return float(self.coordinator.data[entity_key])
             except (ValueError, TypeError):
                 pass
-        
+
         return None
 
     def _validate_soc_constraints(self, value: float, validation_config: dict) -> None:
@@ -599,7 +597,7 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
         if soc_validation:
             try:
                 self._validate_soc_constraints(value, soc_validation)
-            except ServiceValidationError as err:
+            except ServiceValidationError:
                 # SOC validation failed, use same UI revert mechanism as write_condition
                 await self._revert_ui_state(value)
                 raise
@@ -862,10 +860,10 @@ class ModbusLocalDeviceNumber(AnkerSolixBaseEntity, NumberEntity):
                 self.async_write_ha_state()
             return
 
-        is_protected, protected_value = self.coordinator.get_protected_value(
+        is_protected, _ = self.coordinator.get_protected_value(
             self._entity_key
         )
-        
+
         if is_protected:
             # Write protection active: keep user's value, just update availability
             self.async_write_ha_state()

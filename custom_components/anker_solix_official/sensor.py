@@ -7,26 +7,26 @@ import math
 from typing import Any
 
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
-    SensorDeviceClass,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    PERCENTAGE,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfTemperature,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
-from homeassistant.const import (
-    PERCENTAGE,
-    UnitOfPower,
-    UnitOfEnergy,
-    UnitOfTemperature,
-    UnitOfElectricPotential,
-    UnitOfElectricCurrent,
-)
 
+from .base_entity import AnkerSolixBaseEntity, async_setup_entities_with_retry
 from .const import DOMAIN
 from .coordinator import AnkerSolixOfficialCoordinator
-from .base_entity import AnkerSolixBaseEntity, async_setup_entities_with_retry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -257,7 +257,7 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
                     result = abs(numeric_value) if numeric_value < 0 else 0
                 else:
                     result = numeric_value
-                
+
                 # Return as int if whole number
                 if result == int(result):
                     return int(result)

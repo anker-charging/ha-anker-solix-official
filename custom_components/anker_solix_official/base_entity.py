@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -25,7 +26,7 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
 
     def __init__(
         self,
-        coordinator: "AnkerSolixOfficialCoordinator",
+        coordinator: AnkerSolixOfficialCoordinator,
         entity_key: str,
         entity_config: dict[str, Any],
     ) -> None:
@@ -37,9 +38,9 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
             entity_config: Entity configuration dict
         """
         super().__init__(coordinator)
-        
+
         self._entity_key = entity_key
-        
+
         self._config = entity_config
         self._register_address = entity_config.get("address")
 
@@ -258,7 +259,7 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
         # Defensive check: if target is None, treat as pass (no condition to check)
         if target is None:
             return True
-        
+
         # For list-based operators, ensure target is iterable
         if operator in ("in", "not_in"):
             if not isinstance(target, (list, tuple, set)):
@@ -268,14 +269,14 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
                 if operator == "in"
                 else not any(abs(value - float(t)) < 0.5 for t in target)
             )
-        
+
         # For numeric comparisons, ensure target is numeric
         if not isinstance(target, (int, float)):
             try:
                 target = float(target)
             except (ValueError, TypeError):
                 return True
-        
+
         if operator == "eq":
             if isinstance(target, int) or (isinstance(target, float) and target == int(target)):
                 return abs(value - target) < 0.5
@@ -292,7 +293,7 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
             return value < target
         elif operator == "lte":
             return value <= target
-        
+
         return True
 
     async def _revert_ui_state(self, user_value: Any) -> None:
@@ -425,10 +426,10 @@ class AnkerSolixBaseEntity(CoordinatorEntity):
 
 async def async_setup_entities_with_retry(
     hass: HomeAssistant,
-    coordinator: "AnkerSolixOfficialCoordinator",
+    coordinator: AnkerSolixOfficialCoordinator,
     async_add_entities: AddEntitiesCallback,
     entity_filter: Callable[[str, dict], bool],
-    entity_factory: Callable[["AnkerSolixOfficialCoordinator", str, dict], Any],
+    entity_factory: Callable[[AnkerSolixOfficialCoordinator, str, dict], Any],
     platform_name: str,
 ) -> None:
     """Create this platform's entities from the coordinator's device config.
