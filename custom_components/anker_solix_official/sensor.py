@@ -156,12 +156,36 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
         elif unit and unit != "/":
             self._attr_state_class = SensorStateClass.MEASUREMENT
 
+        # Classes declared in the device YAML take precedence over unit inference
+        if declared_device_class := self._parse_declared_class(
+            SensorDeviceClass, config.get("device_class")
+        ):
+            self._attr_device_class = declared_device_class
+        if declared_state_class := self._parse_declared_class(
+            SensorStateClass, config.get("state_class")
+        ):
+            self._attr_state_class = declared_state_class
+
         # Derive display precision from gain so UI decimals match register resolution
         gain = config.get("gain")
         if isinstance(gain, (int, float)) and gain > 0:
             precision = round(math.log10(gain))
             if 10**precision == gain:
                 self._attr_suggested_display_precision = precision
+
+    def _parse_declared_class(self, enum_cls: type, raw: Any) -> Any | None:
+        if raw is None:
+            return None
+        try:
+            return enum_cls(str(raw).lower())
+        except ValueError:
+            _LOGGER.warning(
+                "Ignoring invalid %s '%s' declared for %s",
+                enum_cls.__name__,
+                raw,
+                self._entity_key,
+            )
+            return None
 
     def _get_aggregated_value(self, default: Any = None) -> Any:
         """Get aggregated value from primary and additional sources.

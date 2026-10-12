@@ -12,6 +12,7 @@ sensor.py reads, mirroring the pattern used in test_base_entity.py.
 
 from __future__ import annotations
 
+import logging
 import math
 from types import SimpleNamespace
 from typing import Any
@@ -192,6 +193,110 @@ class TestNumericSensorsKeepPrecision:
             {"address": 10014, "data_type": "UINT16", "unit": "%", "gain": 1},
         )
         assert entity.device_class == "battery"
+
+    def test_yaml_declared_classes_override_unit_inference(
+        self, fake_coordinator
+    ) -> None:
+        entity = _make_sensor(
+            fake_coordinator,
+            "any_stored_energy_key",
+            {
+                "address": 10250,
+                "data_type": "UINT32",
+                "unit": "kWh",
+                "gain": 10,
+                "device_class": "energy_storage",
+                "state_class": "measurement",
+            },
+        )
+        assert entity.device_class == "energy_storage"
+        assert entity.state_class == "measurement"
+        assert entity.native_unit_of_measurement == "kWh"
+        assert entity.suggested_display_precision == 1
+
+    def test_kwh_without_yaml_classes_stays_total_increasing(
+        self, fake_coordinator
+    ) -> None:
+        entity = _make_sensor(
+            fake_coordinator,
+            "any_energy_meter_key",
+            {"address": 10018, "data_type": "UINT32", "unit": "kWh", "gain": 10},
+        )
+        assert entity.device_class == "energy"
+        assert entity.state_class == "total_increasing"
+
+    def test_yaml_state_class_alone_keeps_unit_inferred_device_class(
+        self, fake_coordinator
+    ) -> None:
+        entity = _make_sensor(
+            fake_coordinator,
+            "any_energy_key",
+            {
+                "address": 10018,
+                "data_type": "UINT32",
+                "unit": "kWh",
+                "gain": 10,
+                "state_class": "measurement",
+            },
+        )
+        assert entity.device_class == "energy"
+        assert entity.state_class == "measurement"
+
+    def test_invalid_declared_device_class_is_ignored_with_warning(
+        self, fake_coordinator, caplog
+    ) -> None:
+        with caplog.at_level(logging.WARNING):
+            entity = _make_sensor(
+                fake_coordinator,
+                "bad_device_class_key",
+                {
+                    "address": 10018,
+                    "data_type": "UINT32",
+                    "unit": "kWh",
+                    "gain": 10,
+                    "device_class": "power-factor",
+                },
+            )
+        assert entity.device_class == "energy"
+        assert entity.state_class == "total_increasing"
+        assert "Ignoring invalid SensorDeviceClass 'power-factor'" in caplog.text
+        assert "bad_device_class_key" in caplog.text
+
+    def test_invalid_declared_state_class_is_ignored_with_warning(
+        self, fake_coordinator, caplog
+    ) -> None:
+        with caplog.at_level(logging.WARNING):
+            entity = _make_sensor(
+                fake_coordinator,
+                "bad_state_class_key",
+                {
+                    "address": 10010,
+                    "data_type": "INT32",
+                    "unit": "W",
+                    "gain": 1,
+                    "state_class": "meassurement",
+                },
+            )
+        assert entity.device_class == "power"
+        assert entity.state_class == "measurement"
+        assert "Ignoring invalid SensorStateClass 'meassurement'" in caplog.text
+        assert "bad_state_class_key" in caplog.text
+
+    def test_declared_class_is_case_insensitive(self, fake_coordinator) -> None:
+        entity = _make_sensor(
+            fake_coordinator,
+            "mixed_case_key",
+            {
+                "address": 10250,
+                "data_type": "UINT32",
+                "unit": "kWh",
+                "gain": 10,
+                "device_class": "Energy_Storage",
+                "state_class": "MEASUREMENT",
+            },
+        )
+        assert entity.device_class == "energy_storage"
+        assert entity.state_class == "measurement"
 
 
 class TestValueMappingSensor:

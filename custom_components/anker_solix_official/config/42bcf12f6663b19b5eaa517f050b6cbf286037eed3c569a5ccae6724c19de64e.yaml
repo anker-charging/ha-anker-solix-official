@@ -96,6 +96,8 @@ read_quantities:
     gain: 1000
     count: 1
     icon: "mdi:flash"
+    device_class: "power_factor"
+    state_class: "measurement"
 
   primary_phase_1_active_power:
     translation_key: "primary_phase_1_active_power"
@@ -279,6 +281,8 @@ read_quantities:
     gain: 1000
     count: 1
     icon: "mdi:flash"
+    device_class: "power_factor"
+    state_class: "measurement"
 
   secondary_phase_1_active_power:
     translation_key: "secondary_phase_1_active_power"

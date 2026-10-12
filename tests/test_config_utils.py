@@ -401,3 +401,58 @@ class TestSmartPlugRequirement3669:
                 json.loads(lang_file.read_text(encoding="utf-8"))["entity"]["sensor"]
             )
             assert "cumulative_energy" in names, lang_file.name
+
+
+CONFIG_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "custom_components"
+    / "anker_solix_official"
+    / "config"
+)
+
+STORED_ENERGY_KEYS = {"rated_energy"}
+CUMULATIVE_ENERGY_KEYS = {
+    "pv_total_generation",
+    "cumulative_charge_energy",
+    "cumulative_discharge_energy",
+}
+
+
+def _shipped_battery_data_points():
+    for path in sorted(CONFIG_DIR.glob("*.yaml")):
+        cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+        data_points, _ = parse_device_configuration(cfg)
+        if STORED_ENERGY_KEYS & data_points.keys():
+            yield path.name, data_points
+
+
+class TestShippedEnergyClasses:
+    """Issue #138: stored energy must not be declared as a cumulative meter."""
+
+    def test_stored_energy_declares_energy_storage_measurement(self) -> None:
+        checked = 0
+        for name, data_points in _shipped_battery_data_points():
+            for key in STORED_ENERGY_KEYS & data_points.keys():
+                dp = data_points[key]
+                assert dp.get("device_class") == "energy_storage", (name, key)
+                assert dp.get("state_class") == "measurement", (name, key)
+                checked += 1
+        assert checked > 0
+
+    def test_cumulative_energy_does_not_override_state_class(self) -> None:
+        for name, data_points in _shipped_battery_data_points():
+            for key in CUMULATIVE_ENERGY_KEYS & data_points.keys():
+                assert "state_class" not in data_points[key], (name, key)
+
+
+class TestShippedPowerFactorClasses:
+    """Issue #130: a unitless ratio needs declared classes to get statistics."""
+
+    def test_power_factor_declares_power_factor_measurement(self) -> None:
+        data_points, _ = _load_meter_config()
+        keys = [k for k in data_points if k.endswith("_power_factor")]
+        assert keys
+        for key in keys:
+            dp = data_points[key]
+            assert dp.get("device_class") == "power_factor", key
+            assert dp.get("state_class") == "measurement", key
