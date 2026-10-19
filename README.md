@@ -137,6 +137,23 @@ A: This is due to different data sources and does not indicate a device malfunct
 
 Because the tracking start times and refresh rates differ, a reasonable discrepancy between the two platforms is completely normal.
 
+**Q: Why can't I control or enable grid feed-in (export) through Home Assistant?**
+
+A: This is mainly due to local regulations and hardware requirements:
+
+- To comply with regulations in certain countries/regions (Italy, Spain, Thailand, Vietnam, and the Philippines), the grid feed-in feature is disabled by default.
+- If the system is not connected to a smart meter, it physically cannot achieve precise grid feed-in.
+
+**Solution:** The feed-in function cannot be forcefully enabled directly within HA. Please go to the Anker App, manually turn on the "Grid Feed-in" switch in the settings, or ensure that your power station has successfully added and bound to a smart meter. Once configured in the Anker App, HA will be able to sync and control it normally.
+
+**Q: Why does the device ignore HA controls, suddenly interrupt discharging, and start charging at full power?**
+
+A: This is usually because the system has triggered the "Fast Charging" or "Storm Guard" feature.
+
+These two are core backup power strategies for Anker energy storage systems, and their priority is higher than any third-party control commands (such as Home Assistant). Once the trigger conditions are met, to ensure your backup power, the system will forcefully interrupt the current discharge plan and charge the battery at full power.
+
+**Solution:** If you prefer HA to fully take over the charging and discharging strategies and do not need the system's automatic backup power, please go to the Anker App and manually turn off the "Fast Charging" and "Storm Guard" features.
+
 For more instructions on using Home Assistant and FAQs, please visit: https://anker-webview-eu.anker.com/home-assistant
 
 ## Data Security
