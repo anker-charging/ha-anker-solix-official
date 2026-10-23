@@ -146,13 +146,13 @@ A: This is mainly due to local regulations and hardware requirements:
 
 **Solution:** The feed-in function cannot be forcefully enabled directly within HA. Please go to the Anker App, manually turn on the "Grid Feed-in" switch in the settings, or ensure that your power station has successfully added and bound to a smart meter. Once configured in the Anker App, HA will be able to sync and control it normally.
 
-**Q: Why does the device ignore HA controls, suddenly interrupt discharging, and start charging at full power?**
+**Q: Why does the device ignore HA commands, suddenly interrupt discharging, and start charging at full power?**
 
-A: This is usually because the system has triggered the "Fast Charging" or "Storm Guard" feature.
+A: This typically happens when the system triggers one of the following mechanisms: the battery level drops below the preset Backup SOC, an SOC Calibration is in progress, "Fast Charging" is enabled, or "Storm Guard" is activated.
 
-These two are core backup power strategies for Anker energy storage systems, and their priority is higher than any third-party control commands (such as Home Assistant). Once the trigger conditions are met, to ensure your backup power, the system will forcefully interrupt the current discharge plan and charge the battery at full power.
+These are the core backup protection and battery maintenance strategies of the Anker energy storage system. They have the highest priority and will override any third-party control commands (such as Home Assistant). Once triggered, the system forces a halt to the current discharge plan and charges the battery at full power to ensure sufficient backup energy or to recalibrate battery accuracy.
 
-**Solution:** If you prefer HA to fully take over the charging and discharging strategies and do not need the system's automatic backup power, please go to the Anker App and manually turn off the "Fast Charging" and "Storm Guard" features.
+**Solution:** If you prefer Home Assistant to take full control of the charging and discharging strategies without any automatic system intervention, please go to the Anker App and manually disable "Backup Reserve (SOC)", "SOC Calibration", "Fast Charging", and "Storm Guard".
 
 For more instructions on using Home Assistant and FAQs, please visit: https://anker-webview-eu.anker.com/home-assistant
 
