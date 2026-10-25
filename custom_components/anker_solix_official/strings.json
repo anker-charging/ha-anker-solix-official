@@ -54,6 +54,9 @@
       "battery_soc": {
         "name": "SOC"
       },
+      "battery_temperature": {
+        "name": "Battery Temperature"
+      },
       "battery_soh": {
         "name": "Battery SOH"
       },
@@ -65,6 +68,15 @@
       },
       "battery_discharging_power": {
         "name": "Battery Discharging Power"
+      },
+      "ac_input_power_raw": {
+        "name": "AC Input Power"
+      },
+      "battery_heating_power": {
+        "name": "Battery Heating Power"
+      },
+      "battery_cell_power": {
+        "name": "Battery Cell Power"
       },
       "load_power": {
         "name": "Home Load"
