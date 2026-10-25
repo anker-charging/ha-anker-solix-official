@@ -80,6 +80,9 @@
       "battery_soc": {
         "name": "SOC"
       },
+      "battery_temperature": {
+        "name": "Température de la batterie"
+      },
       "battery_soh": {
         "name": "État de santé de la batterie"
       },
@@ -91,6 +94,15 @@
       },
       "battery_discharging_power": {
         "name": "Puissance de décharge de la batterie"
+      },
+      "ac_input_power_raw": {
+        "name": "Puissance d'entrée AC"
+      },
+      "battery_heating_power": {
+        "name": "Puissance de chauffage de la batterie"
+      },
+      "battery_cell_power": {
+        "name": "Puissance des cellules de la batterie"
       },
       "load_power": {
         "name": "Accueil Chargement"

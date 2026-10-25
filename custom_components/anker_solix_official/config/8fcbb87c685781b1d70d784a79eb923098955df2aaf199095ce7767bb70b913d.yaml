@@ -83,6 +83,15 @@ read_quantities:
     count: 1
     icon: "mdi:battery"
 
+  battery_temperature:
+    translation_key: "battery_temperature"
+    address: 10156
+    data_type: "INT16"
+    unit: "°C"
+    gain: 10
+    count: 1
+    icon: "mdi:thermometer"
+
   # PV related data points
   # PV power = sum of PCS PV power(10002) + third-party PV power(10004)
   pv_power:
@@ -130,6 +139,45 @@ read_quantities:
     count: 2
     icon: "mdi:battery-arrow-down"
     power_split_mode: "positive_only"
+
+  # Total AC power drawn by the unit incl. battery heater (negative = charging)
+  # Internal: used to calculate battery heating power
+  ac_input_power_raw:
+    translation_key: "ac_input_power_raw"
+    address: 10006
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:transmission-tower-import"
+    internal: true
+
+  # Battery heating power = battery power (10008) - AC input power (10006).
+  # Verified while charging: 3000 W limit -> -2450 / -2210 -> 240 W (app: 240 W),
+  # 1000 W limit -> -1000 / -1000 -> 0 W (app: no heating).
+  # Only calculated while charging (10006 < 0), otherwise 0.
+  battery_heating_power:
+    translation_key: "battery_heating_power"
+    address: 10008
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:heat-wave"
+    subtract_sources:
+      - "ac_input_power_raw"
+    require_negative: "ac_input_power_raw"
+    power_split_mode: "positive_only"
+
+  # Unverified: likely DC power into battery cells (matched app "2.1 kW" at 2090)
+  battery_cell_power:
+    translation_key: "battery_cell_power"
+    address: 10255
+    data_type: "INT16"
+    unit: "W"
+    gain: 1
+    count: 1
+    icon: "mdi:battery-sync"
   load_power:
     translation_key: "load_power"
     address: 10010

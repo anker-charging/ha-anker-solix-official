@@ -177,16 +177,36 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
         """
         primary_value = self._get_raw_value(default)
 
-        # Check for additional sources configuration
+        # Check for additional / subtracted sources configuration
         additional_sources = self._config.get("additional_sources", [])
-        if not additional_sources:
+        subtract_sources = self._config.get("subtract_sources", [])
+        if not additional_sources and not subtract_sources:
             return primary_value
 
         # Only aggregate numeric values
         if not isinstance(primary_value, (int, float)):
             return primary_value
 
+        data = self.coordinator.data or {}
+
+        # Optional gate: value is only meaningful while another data point is
+        # negative (e.g. heater power only while charging from AC). Otherwise 0.
+        require_negative = self._config.get("require_negative")
+        if require_negative:
+            gate_value = data.get(require_negative)
+            if not isinstance(gate_value, (int, float)):
+                return None
+            if gate_value >= 0:
+                return 0
+
         total = float(primary_value)
+
+        # Subtract values of subtract_sources; any missing source -> no fresh data
+        for source_key in subtract_sources:
+            source_value = data.get(source_key)
+            if not isinstance(source_value, (int, float)):
+                return None
+            total -= float(source_value)
 
         # Sum values from additional sources
         for source_key in additional_sources:
@@ -224,7 +244,9 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
         # as state "unknown" (entity stays available), which Recorder's
         # statistics compiler skips entirely rather than folding into sum/
         # reset detection.
-        if self._config.get("additional_sources"):
+        if self._config.get("additional_sources") or self._config.get(
+            "subtract_sources"
+        ):
             value = self._get_aggregated_value()
         else:
             value = self._get_raw_value()
@@ -318,5 +340,16 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
                     source_value = self.coordinator.data.get(source_key)
                     if source_value is not None:
                         attrs[f"source_{source_key}"] = source_value
+
+        # For difference sensors, show subtracted component values
+        subtract_sources = self._config.get("subtract_sources", [])
+        if subtract_sources:
+            attrs["primary_value"] = self._get_raw_value()
+            attrs["subtract_sources"] = subtract_sources
+            data = self.coordinator.data or {}
+            for source_key in subtract_sources:
+                source_value = data.get(source_key)
+                if source_value is not None:
+                    attrs[f"source_{source_key}"] = source_value
 
         return attrs
