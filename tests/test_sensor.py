@@ -831,3 +831,55 @@ class TestSmartPlugCumulativeEnergySensor:
         assert entity.state_class == "total_increasing"
         assert entity.suggested_display_precision == 3
         assert entity.native_value == 123.456
+
+
+class TestExplicitNoStateClass:
+    """YAML can opt a sensor out of long-term statistics with state_class: none."""
+
+    CONFIG = {
+        "address": 10250,
+        "data_type": "UINT32",
+        "unit": "kWh",
+        "gain": 10,
+        "device_class": "energy_storage",
+    }
+
+    def test_explicit_none_removes_unit_inferred_state_class(
+        self, fake_coordinator
+    ) -> None:
+        for raw in ("none", "None", "NONE", None):
+            entity = _make_sensor(
+                fake_coordinator, "rated_energy", {**self.CONFIG, "state_class": raw}
+            )
+            assert entity.state_class is None, raw
+            assert entity.device_class == "energy_storage"
+            assert entity.native_unit_of_measurement == "kWh"
+
+    def test_missing_state_class_still_infers_total_increasing(
+        self, fake_coordinator
+    ) -> None:
+        entity = _make_sensor(fake_coordinator, "cumulative_energy", dict(self.CONFIG))
+        assert entity.state_class == "total_increasing"
+
+    def test_shipped_yaml_rated_energy_has_no_state_class(
+        self, fake_coordinator
+    ) -> None:
+        import glob
+
+        import yaml
+
+        from custom_components.anker_solix_official.config_utils import (
+            parse_device_configuration,
+        )
+
+        seen = 0
+        for f in glob.glob("custom_components/anker_solix_official/config/*.yaml"):
+            with open(f, encoding="utf-8") as fh:
+                dps, _ = parse_device_configuration(yaml.safe_load(fh))
+            if "rated_energy" not in dps:
+                continue
+            seen += 1
+            entity = _make_sensor(fake_coordinator, "rated_energy", dps["rated_energy"])
+            assert entity.state_class is None, f
+            assert entity.device_class == "energy_storage", f
+        assert seen == 4

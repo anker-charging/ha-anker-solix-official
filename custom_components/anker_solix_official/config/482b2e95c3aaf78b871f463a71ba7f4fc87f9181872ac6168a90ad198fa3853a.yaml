@@ -206,7 +206,7 @@ read_quantities:
     count: 2
     icon: "mdi:battery"
     device_class: "energy_storage"
-    state_class: "measurement"
+    state_class: "none"
 
   battery_status:
     translation_key: "battery_status"

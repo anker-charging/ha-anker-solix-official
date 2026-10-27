@@ -161,10 +161,17 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
             SensorDeviceClass, config.get("device_class")
         ):
             self._attr_device_class = declared_device_class
-        if declared_state_class := self._parse_declared_class(
-            SensorStateClass, config.get("state_class")
-        ):
-            self._attr_state_class = declared_state_class
+        # An explicit "none" (or YAML null) removes the unit-inferred state class,
+        # e.g. for constant values that should not write long-term statistics.
+        # A missing key keeps the unit-based inference.
+        if "state_class" in config:
+            raw_state_class = config["state_class"]
+            if raw_state_class is None or str(raw_state_class).lower() == "none":
+                self._attr_state_class = None
+            elif declared_state_class := self._parse_declared_class(
+                SensorStateClass, raw_state_class
+            ):
+                self._attr_state_class = declared_state_class
 
         # Derive display precision from gain so UI decimals match register resolution
         gain = config.get("gain")

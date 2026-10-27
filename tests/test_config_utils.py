@@ -429,13 +429,13 @@ def _shipped_battery_data_points():
 class TestShippedEnergyClasses:
     """Issue #138: stored energy must not be declared as a cumulative meter."""
 
-    def test_stored_energy_declares_energy_storage_measurement(self) -> None:
+    def test_stored_energy_declares_energy_storage_without_state_class(self) -> None:
         checked = 0
         for name, data_points in _shipped_battery_data_points():
             for key in STORED_ENERGY_KEYS & data_points.keys():
                 dp = data_points[key]
                 assert dp.get("device_class") == "energy_storage", (name, key)
-                assert dp.get("state_class") == "measurement", (name, key)
+                assert str(dp.get("state_class")).lower() == "none", (name, key)
                 checked += 1
         assert checked > 0
 
