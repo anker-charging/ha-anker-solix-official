@@ -35,6 +35,19 @@ This integration is built for select Anker Solix products, designed to take full
 
 More Anker Solix devices are being added progressively. Stay tuned for updates.
 
+### Modbus Protocol Documentation
+
+Great news for Home Assistant users! We have officially released the Modbus protocol documentation on our Support page. You can access the external link here:
+
+[Modbus Protocol Documentation](https://support.ankersolix.com/s/downloads?location=/000039871/en_US/000039871.pdf)
+
+Currently Supported Models:
+
+- Anker SOLIX Solarbank Max AC
+- Anker SOLIX Solarbank Max
+- Anker SOLIX XE AC
+- Anker SOLIX XE
+
 ### Other Anker Solix Products
 
 Due to current product roadmap prioritization, this project focuses on select Anker SOLIX products to ensure stability, compatibility, and feature completeness. The following products are not part of the active integration scope. Anker provides official Modbus protocol documentation for reference:
