@@ -80,6 +80,9 @@
       "battery_soc": {
         "name": "SOC"
       },
+      "battery_temperature": {
+        "name": "Batterijtemperatuur"
+      },
       "battery_soh": {
         "name": "Batterijgezondheid"
       },
@@ -91,6 +94,15 @@
       },
       "battery_discharging_power": {
         "name": "Ontlaadvermogen van de batterij"
+      },
+      "ac_input_power_raw": {
+        "name": "AC-ingangsvermogen"
+      },
+      "battery_heating_power": {
+        "name": "Batterijverwarmingsvermogen"
+      },
+      "battery_cell_power": {
+        "name": "Batterijcelvermogen"
       },
       "load_power": {
         "name": "Thuis Lading"
