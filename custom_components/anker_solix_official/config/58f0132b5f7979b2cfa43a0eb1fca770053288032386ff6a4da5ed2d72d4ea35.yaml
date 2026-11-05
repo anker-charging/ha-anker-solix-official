@@ -383,10 +383,16 @@ control_items:
     icon: "mdi:transmission-tower-export"
     data_type_category: "control"
     display_type: "input"
-    min_value: 100
+    min_value: 0
     max_value: 50000
     step: 1
     register_type: "holding"
+    value_constraints:
+      rules:
+        - type: "forbidden_range"
+          min: 1
+          max: 99
+          error_key: "power_range_1_to_99_not_allowed"
     visibility_entity: "export_limit"
     visibility_value: 1
 

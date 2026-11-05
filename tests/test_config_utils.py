@@ -486,3 +486,25 @@ class TestExportControlRegisters:
             if "export_limit" not in data_points:
                 continue
             assert set(data_points["export_limit"]["options"]) == {"0", "1"}, path.name
+
+    def test_export_limit_value_allows_zero_or_100_to_50000(self) -> None:
+        rule = {
+            "type": "forbidden_range",
+            "min": 1,
+            "max": 99,
+            "error_key": "power_range_1_to_99_not_allowed",
+        }
+        for path in sorted(CONFIG_DIR.glob("*.yaml")):
+            cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+            data_points, _ = parse_device_configuration(cfg)
+            if "export_limit_value" not in data_points:
+                continue
+            dp = data_points["export_limit_value"]
+            assert (dp["min_value"], dp["max_value"]) == (0, 50000), path.name
+            assert dp["value_constraints"]["rules"] == [rule], path.name
+        for code in ("en", "de", "fr", "nl"):
+            translations = CONFIG_DIR.parent / "translations" / f"{code}.json"
+            exceptions = json.loads(translations.read_text(encoding="utf-8"))[
+                "exceptions"
+            ]
+            assert rule["error_key"] in exceptions, code
