@@ -123,13 +123,13 @@
         "name": "Akkukapazität"
       },
       "power_station_status": {
-        "name": "Kraftwerksstatus",
+        "name": "Systemstatus",
         "state": {
           "unknown": "Unbekannt",
-          "grid_tied": "Netzgekoppelter Betrieb",
-          "off_grid": "Netzunabhängiger Betrieb",
-          "standby": "Bereitschaft",
-          "fault": "Fehler"
+          "grid_tied": "Netzgekoppelt",
+          "off_grid": "Inselbetrieb",
+          "standby": "Standby",
+          "fault": "Störung"
         }
       },
       "battery_status": {
@@ -341,6 +341,9 @@
       }
     },
     "number": {
+      "export_limit_value": {
+        "name": "Max. Einspeiseleistung"
+      },
       "battery_charge_discharge_setpoint": {
         "name": "Batterie-Lade-/Entlade-Sollwert"
       },
@@ -361,6 +364,9 @@
       }
     },
     "switch": {
+      "export_limit": {
+        "name": "Einspeisebegrenzung"
+      },
       "power_on_off_control": {
         "name": "Ausgangsschalter"
       },

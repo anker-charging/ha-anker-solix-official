@@ -123,7 +123,7 @@
         "name": "Accucapaciteit"
       },
       "power_station_status": {
-        "name": "Status energiecentrale",
+        "name": "Systeemstatus",
         "state": {
           "unknown": "Onbekend",
           "grid_tied": "Netgekoppeld",
@@ -341,6 +341,9 @@
       }
     },
     "number": {
+      "export_limit_value": {
+        "name": "Max. terugleververmogen"
+      },
       "battery_charge_discharge_setpoint": {
         "name": "Batterij laad-/ontlaadinstelpunt"
       },
@@ -361,6 +364,9 @@
       }
     },
     "switch": {
+      "export_limit": {
+        "name": "Terugleverbegrenzing"
+      },
       "power_on_off_control": {
         "name": "Uitgangsschakelaar"
       },

@@ -456,3 +456,33 @@ class TestShippedPowerFactorClasses:
             dp = data_points[key]
             assert dp.get("device_class") == "power_factor", key
             assert dp.get("state_class") == "measurement", key
+
+
+EXPORT_CONTROL_KEYS = ("export_limit", "export_limit_value")
+
+
+class TestExportControlRegisters:
+    """#3670: export control registers are read individually, like 0x8007."""
+
+    def test_export_control_registers_are_outside_every_batch_range(self) -> None:
+        for path in sorted(CONFIG_DIR.glob("*.yaml")):
+            cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+            data_points, batch_ranges = parse_device_configuration(cfg)
+            for key in EXPORT_CONTROL_KEYS:
+                if key not in data_points:
+                    continue
+                dp = data_points[key]
+                assert dp["register_type"] == "holding", (path.name, key)
+                last = dp["address"] + dp["count"] - 1
+                assert not any(
+                    start <= dp["address"] and last <= end
+                    for start, end, _ in batch_ranges
+                ), (path.name, key)
+
+    def test_export_switch_has_no_percentage_option(self) -> None:
+        for path in sorted(CONFIG_DIR.glob("*.yaml")):
+            cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+            data_points, _ = parse_device_configuration(cfg)
+            if "export_limit" not in data_points:
+                continue
+            assert set(data_points["export_limit"]["options"]) == {"0", "2"}, path.name

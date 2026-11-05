@@ -36,7 +36,6 @@ batch_read_ranges:
     - 32768-32774
   holding:
     - 10060-10072
-    - 10074-10081
     - 60000-60003
 
 # =======================================================================
@@ -70,6 +69,20 @@ read_quantities:
     gain: 1
     count: 6
     icon: "mdi:information"
+
+  power_station_status:
+    translation_key: "power_station_status"
+    address: 10000
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    icon: "mdi:information-outline"
+    value_mapping:
+      1: "grid_tied"
+      2: "off_grid"
+      3: "standby"
+      4: "fault"
 
   # Battery related data points
   battery_soc:
@@ -351,6 +364,38 @@ write_quantities:
 # Number Input Controls (write - numeric)
 # =======================================================================
 control_items:
+  export_limit:
+    translation_key: "export_limit"
+    address: 10074
+    data_type: "UINT16"
+    unit: "/"
+    gain: 1
+    count: 1
+    icon: "mdi:transmission-tower-export"
+    data_type_category: "control"
+    control_type: "switch"
+    register_type: "holding"
+    options:
+      "0": "disabled"
+      "2": "enabled"
+
+  export_limit_value:
+    translation_key: "export_limit_value"
+    address: 10075
+    data_type: "INT32"
+    unit: "W"
+    gain: 1
+    count: 2
+    icon: "mdi:transmission-tower-export"
+    data_type_category: "control"
+    display_type: "input"
+    min_value: 100
+    max_value: 50000
+    step: 1
+    register_type: "holding"
+    visibility_entity: "export_limit"
+    visibility_value: 2
+
   # Combined power setpoint (works with battery_power_direction)
   # Only visible when user selects third_party_control mode (value=3)
   battery_power_setpoint:

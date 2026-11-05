@@ -123,12 +123,12 @@
         "name": "Autonomie de la batterie"
       },
       "power_station_status": {
-        "name": "État de la centrale",
+        "name": "Statut du système",
         "state": {
           "unknown": "Inconnu",
           "grid_tied": "Connecté au réseau",
           "off_grid": "Hors réseau",
-          "standby": "Veille",
+          "standby": "En veille",
           "fault": "Défaut"
         }
       },
@@ -341,6 +341,9 @@
       }
     },
     "number": {
+      "export_limit_value": {
+        "name": "Puissance d'injection max."
+      },
       "battery_charge_discharge_setpoint": {
         "name": "Consigne charge/décharge batterie"
       },
@@ -361,6 +364,9 @@
       }
     },
     "switch": {
+      "export_limit": {
+        "name": "Limitation d'injection"
+      },
       "power_on_off_control": {
         "name": "Interrupteur de sortie"
       },

@@ -123,11 +123,11 @@
         "name": "Battery Capacity"
       },
       "power_station_status": {
-        "name": "Power Station Status",
+        "name": "System Status",
         "state": {
           "unknown": "Unknown",
-          "grid_tied": "Grid-tied Operation",
-          "off_grid": "Off-grid Operation",
+          "grid_tied": "On-Grid",
+          "off_grid": "Off-Grid",
           "standby": "Standby",
           "fault": "Fault"
         }
@@ -341,6 +341,9 @@
       }
     },
     "number": {
+      "export_limit_value": {
+        "name": "Export Power Cap"
+      },
       "battery_charge_discharge_setpoint": {
         "name": "Battery Charge/Discharge Setpoint"
       },
@@ -361,6 +364,9 @@
       }
     },
     "switch": {
+      "export_limit": {
+        "name": "Export Limit"
+      },
       "power_on_off_control": {
         "name": "Output Switch"
       },
