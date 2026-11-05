@@ -485,4 +485,4 @@ class TestExportControlRegisters:
             data_points, _ = parse_device_configuration(cfg)
             if "export_limit" not in data_points:
                 continue
-            assert set(data_points["export_limit"]["options"]) == {"0", "2"}, path.name
+            assert set(data_points["export_limit"]["options"]) == {"0", "1"}, path.name

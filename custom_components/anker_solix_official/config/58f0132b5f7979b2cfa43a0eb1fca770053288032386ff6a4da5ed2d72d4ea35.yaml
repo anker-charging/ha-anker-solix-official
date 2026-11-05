@@ -371,7 +371,7 @@ control_items:
     register_type: "holding"
     options:
       "0": "disabled"
-      "2": "enabled"
+      "1": "enabled"
 
   export_limit_value:
     translation_key: "export_limit_value"
@@ -388,7 +388,7 @@ control_items:
     step: 1
     register_type: "holding"
     visibility_entity: "export_limit"
-    visibility_value: 2
+    visibility_value: 1
 
   # Combined power setpoint (works with battery_power_direction)
   # Only visible when user selects third_party_control mode (value=3)
