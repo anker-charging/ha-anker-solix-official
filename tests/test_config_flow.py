@@ -9,13 +9,13 @@ Modbus I/O.
 from __future__ import annotations
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.anker_solix_official import config_flow as config_flow_module
 from custom_components.anker_solix_official.config_flow import (
     AnkerSolixOfficialConfigFlow,
+    AnkerSolixOfficialOptionsFlowHandler,
 )
 from custom_components.anker_solix_official.const import DOMAIN
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 class _FakeModbusClient:
@@ -255,3 +255,57 @@ class TestAsyncGetOptionsFlow:
         entry = MockConfigEntry(domain=DOMAIN, data={}, entry_id="abc123")
         handler = AnkerSolixOfficialConfigFlow.async_get_options_flow(entry)
         assert handler._entry_id == "abc123"
+
+
+class TestOptionsFlowHandler:
+    """AnkerSolixOfficialOptionsFlowHandler preserves persisted entry options."""
+
+    async def test_saving_options_preserves_initial_mode_sent(self, hass) -> None:
+        """Saving the options form must merge with existing options, not wipe initial_mode_sent."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={"device_name": "Solarbank", "ip_address": "192.168.1.50", "port": 502},
+            options={"initial_mode_sent": True},
+        )
+        entry.add_to_hass(hass)
+
+        handler = AnkerSolixOfficialOptionsFlowHandler(entry)
+        handler.hass = hass
+        result = await handler.async_step_init(user_input={"device_name": "Solarbank Renamed"})
+
+        assert result["type"] == "create_entry"
+        assert result["data"] == {
+            "initial_mode_sent": True,
+            "device_name": "Solarbank Renamed",
+        }
+
+    async def test_saving_options_without_prior_options_succeeds(self, hass) -> None:
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={"device_name": "Solarbank", "ip_address": "192.168.1.50", "port": 502},
+            options={},
+        )
+        entry.add_to_hass(hass)
+
+        handler = AnkerSolixOfficialOptionsFlowHandler(entry)
+        handler.hass = hass
+        result = await handler.async_step_init(user_input={"device_name": "Custom Name"})
+
+        assert result["type"] == "create_entry"
+        assert result["data"] == {"device_name": "Custom Name"}
+
+    async def test_show_form_uses_saved_option_device_name_as_default(self, hass) -> None:
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={"device_name": "Original Name", "ip_address": "192.168.1.50", "port": 502},
+            options={"device_name": "Saved Option Name", "initial_mode_sent": True},
+        )
+        entry.add_to_hass(hass)
+
+        handler = AnkerSolixOfficialOptionsFlowHandler(entry)
+        handler.hass = hass
+        result = await handler.async_step_init()
+
+        assert result["type"] == "form"
+        schema_keys = {str(k): k for k in result["data_schema"].schema}
+        assert schema_keys["device_name"].default() == "Saved Option Name"
