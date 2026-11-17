@@ -81,6 +81,16 @@ read_quantities:
     count: 1
     icon: "mdi:battery"
 
+  battery_temperature:
+    translation_key: "battery_temperature"
+    address: 10156
+    data_type: "INT16"
+    unit: "°C"
+    gain: 10
+    suggested_display_precision: 0
+    count: 1
+    icon: "mdi:thermometer"
+
   # PV related data points
   # PV power = sum of PCS PV power(10002) + third-party PV power(10004)
   pv_power:

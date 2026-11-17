@@ -1,4 +1,4 @@
-"""Unit tests for Solarbank 4 battery temperature and display precision."""
+"""Unit tests for battery temperature sensors and display precision."""
 
 from __future__ import annotations
 
@@ -20,22 +20,40 @@ from custom_components.anker_solix_official.sensor import (
 
 from ._fakes import FakeCoordinator
 
-PROFILE = (
+CONFIG_DIR = (
     Path(__file__).resolve().parents[1]
     / "custom_components/anker_solix_official/config"
-    / "58f0132b5f7979b2cfa43a0eb1fca770053288032386ff6a4da5ed2d72d4ea35.yaml"
 )
+PROFILES = [
+    (
+        "3c176e100f3c1d7a36ef64571e6aacd16b539f3657c11745f7bd969ccaf8b213.yaml",
+        "Anker SOLIX XE",
+    ),
+    (
+        "482b2e95c3aaf78b871f463a71ba7f4fc87f9181872ac6168a90ad198fa3853a.yaml",
+        "Anker SOLIX Solarbank Max",
+    ),
+    (
+        "58f0132b5f7979b2cfa43a0eb1fca770053288032386ff6a4da5ed2d72d4ea35.yaml",
+        "Anker SOLIX Solarbank 4 E5000 Pro",
+    ),
+    (
+        "8fcbb87c685781b1d70d784a79eb923098955df2aaf199095ce7767bb70b913d.yaml",
+        "Anker SOLIX Solarbank Max AC",
+    ),
+]
 KEY = "battery_temperature"
 
 
-@pytest.fixture
-async def temperature_profile() -> tuple[dict[str, Any], tuple[int, int, str]]:
+@pytest.fixture(params=PROFILES, ids=["xe", "max", "solarbank_4", "max_ac"])
+async def temperature_profile(request) -> tuple[dict[str, Any], tuple[int, int, str]]:
     """Use the same profile loader and parser as the integration."""
+    filename, expected_model = request.param
     config = await AnkerSolixDeviceConfig(hass=None).load_device_config_by_file_async(
-        str(PROFILE)
+        str(CONFIG_DIR / filename)
     )
     assert config is not None
-    assert config["product_info"]["default_name"] == "Anker SOLIX Solarbank 4 E5000 Pro"
+    assert config["product_info"]["default_name"] == expected_model
     points, ranges = parse_device_configuration(config)
     point = points[KEY]
     # The temperature is already in an input batch: exposing it adds no reads.
