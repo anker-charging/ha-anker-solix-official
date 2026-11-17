@@ -7,19 +7,16 @@ import re
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     DOMAIN,
-    ERROR_INVALID_IP,
     ERROR_CANNOT_CONNECT,
-    ERROR_CONNECTION_TIMEOUT,
     ERROR_DEVICE_NOT_SUPPORTED,
+    ERROR_INVALID_IP,
 )
-from .device_config import AnkerSolixDeviceConfig
 from .modbus_client import AnkerSolixModbusClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,7 +70,7 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Read device PN using unified method (returns tuple: pn_hash, raw_pn, raw_hex)
             result = await client.read_device_pn()
-            pn_hash, raw_pn, raw_hex = result
+            pn_hash, _raw_pn, raw_hex = result
             if not pn_hash:
                 _LOGGER.warning(
                     "Failed to read device PN from %s:%d - Registers: [%s]",
@@ -92,6 +89,7 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
             from pathlib import Path
+
             import yaml as _yaml
 
             config_file = f"config/{pn_hash}.yaml"
@@ -310,7 +308,7 @@ class AnkerSolixOfficialConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not await self._test_modbus_connection(new_ip, new_port):
                     errors["base"] = ERROR_CANNOT_CONNECT
                 else:
-                    supported, sn = await self._check_device_support(new_ip, new_port)
+                    supported, _sn = await self._check_device_support(new_ip, new_port)
                     if not supported:
                         errors["base"] = ERROR_DEVICE_NOT_SUPPORTED
                     else:
@@ -367,14 +365,24 @@ class AnkerSolixOfficialOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Manage Anker Solix device options."""
+        entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            # Merge with existing options so coordinator-persisted flags such as
+            # initial_mode_sent survive saving the options form (issue #169).
+            merged_options = {
+                **(entry.options if entry and entry.options else {}),
+                **user_input,
+            }
+            return self.async_create_entry(title="", data=merged_options)
 
         # Fetch current entry to populate defaults
-        entry = self.hass.config_entries.async_get_entry(self._entry_id)
         default_name = "Anker Solix Device"
-        if entry and entry.data:
-            default_name = entry.data.get("device_name", default_name)
+        if entry:
+            default_name = (
+                (entry.options or {}).get("device_name")
+                or (entry.data or {}).get("device_name")
+                or default_name
+            )
 
         return self.async_show_form(
             step_id="init",
