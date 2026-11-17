@@ -180,6 +180,11 @@ class ModbusLocalDeviceSensor(AnkerSolixBaseEntity, SensorEntity):
             if 10**precision == gain:
                 self._attr_suggested_display_precision = precision
 
+        # Profiles can suggest fewer decimals without changing register scaling.
+        display_precision = config.get("suggested_display_precision")
+        if type(display_precision) is int and display_precision >= 0:
+            self._attr_suggested_display_precision = display_precision
+
     def _parse_declared_class(self, enum_cls: type, raw: Any) -> Any | None:
         if raw is None:
             return None

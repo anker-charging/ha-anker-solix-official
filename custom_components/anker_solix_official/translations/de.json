@@ -80,6 +80,9 @@
       "battery_soc": {
         "name": "SOC"
       },
+      "battery_temperature": {
+        "name": "Batterietemperatur"
+      },
       "battery_soh": {
         "name": "Batteriegesundheit"
       },

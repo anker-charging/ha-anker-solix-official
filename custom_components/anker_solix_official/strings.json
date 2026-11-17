@@ -54,6 +54,9 @@
       "battery_soc": {
         "name": "SOC"
       },
+      "battery_temperature": {
+        "name": "Battery Temperature"
+      },
       "battery_soh": {
         "name": "Battery SOH"
       },
