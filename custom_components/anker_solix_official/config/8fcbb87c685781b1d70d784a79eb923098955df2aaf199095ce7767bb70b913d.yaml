@@ -81,7 +81,6 @@ read_quantities:
     unit: "%"
     gain: 1
     count: 1
-    icon: "mdi:battery"
 
   # PV related data points
   # PV power = sum of PCS PV power(10002) + third-party PV power(10004)
